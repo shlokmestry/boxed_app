@@ -1,0 +1,82 @@
+{
+  "project_info": {
+    "project_number": "734931807048",
+    "project_id": "boxed-562ab",
+    "storage_bucket": "boxed-562ab.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:734931807048:android:50e84854f87a088eeda17d",
+        "android_client_info": {
+          "package_name": "com.boxed.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "734931807048-r8qa9vko523cs3lhbt68a3lc3uf7p8dr.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyASYwmD01nIgMdsX0A1usgUFkKm03yGeRc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "734931807048-r8qa9vko523cs3lhbt68a3lc3uf7p8dr.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "734931807048-h8rgum8hvs55j90ah0es8ficuha30na5.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.boxedApp"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:734931807048:android:1eb9d8a211327413eda17d",
+        "android_client_info": {
+          "package_name": "com.example.boxed_app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "734931807048-r8qa9vko523cs3lhbt68a3lc3uf7p8dr.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyASYwmD01nIgMdsX0A1usgUFkKm03yGeRc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "734931807048-r8qa9vko523cs3lhbt68a3lc3uf7p8dr.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "734931807048-h8rgum8hvs55j90ah0es8ficuha30na5.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.boxedApp"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
