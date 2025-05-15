@@ -1,4 +1,5 @@
 
+import 'package:boxed_app/widgets/buttons.dart';
 import 'package:flutter/material.dart';
 import 'home_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -10,8 +11,11 @@ class LoginSignup extends StatefulWidget{
   State<LoginSignup> createState() => _LoginSignupState();
 }
 
+
+
 class _LoginSignupState extends State<LoginSignup>{
   bool isLogin = true;
+  bool obscurePassword = true;
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
   @override 
@@ -59,9 +63,16 @@ class _LoginSignupState extends State<LoginSignup>{
             SizedBox(height: 10,),
              TextField(
               controller: passwordController,
+              obscureText: obscurePassword,
               decoration: InputDecoration(
                 border: OutlineInputBorder(),
                 hintText: 'Password',
+                suffixIcon: IconButton(onPressed: (){
+                  setState(() {
+                    obscurePassword = !obscurePassword;
+                  });
+                }, 
+                icon: Icon(obscurePassword ? Icons.visibility_off : Icons.visibility),),
                 enabledBorder: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
                   borderSide: BorderSide(color: Colors.white)
@@ -72,7 +83,8 @@ class _LoginSignupState extends State<LoginSignup>{
 
             ),
             SizedBox(height: 20,),
-            ElevatedButton(
+            Buttons(
+              label: isLogin ? 'Log In' : 'Sign Up',
               onPressed: () async {
   final email = emailController.text.trim();
   final password = passwordController.text.trim();
@@ -100,28 +112,8 @@ class _LoginSignupState extends State<LoginSignup>{
     );
   }
 },
-
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.transparent,
-              foregroundColor: Colors.white,
-              minimumSize: Size.fromHeight(55), 
-              shape: RoundedRectangleBorder(
-                
-                borderRadius: BorderRadius.circular(10),
-                side: BorderSide(color: Colors.white)
-                
-
-              ),
-              elevation: 0,
-            ), child: Text(
-              isLogin ? 'Log In' : 'Sign Up',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.white
-              ),
-            )),
-            
+),
+           
             SizedBox(height: 10,),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,

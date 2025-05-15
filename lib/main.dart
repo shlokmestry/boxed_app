@@ -1,3 +1,4 @@
+import 'package:boxed_app/screens/home_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'screens/login_signup.dart';
@@ -19,7 +20,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(),
       title: 'Boxed',
-      home: const LoginSignup(),
+      home: const  HomeScreen(),
     );
   }
 }
