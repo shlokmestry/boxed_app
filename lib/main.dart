@@ -1,3 +1,5 @@
+import 'package:boxed_app/screens/add_memory_screen.dart';
+import 'package:boxed_app/screens/create_capsule_screen.dart';
 import 'package:boxed_app/screens/home_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -20,7 +22,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(),
       title: 'Boxed',
-      home: const  HomeScreen(),
+      home:  AddMemoryScreen(capsuleId: 'll',),
     );
   }
 }
