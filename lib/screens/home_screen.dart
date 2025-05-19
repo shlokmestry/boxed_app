@@ -1,91 +1,147 @@
-import 'package:boxed_app/screens/create_capsule_screen.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:boxed_app/screens/create_capsule_screen.dart';
+import 'package:boxed_app/screens/capsule_detail_screen.dart';
 
-
-class HomeScreen extends StatefulWidget{
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreen();
+  State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class Capsule {
+class _HomeScreenState extends State<HomeScreen> {
+  @override
+  Widget build(BuildContext context) {
+    final user = FirebaseAuth.instance.currentUser;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('My Capsules'),
+        backgroundColor: Colors.black,
+        centerTitle: true,
+      ),
+      backgroundColor: Colors.black,
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const CreateCapsuleScreen()),
+          );
+        },
+        backgroundColor: Colors.blue,
+        child: const Icon(Icons.add, color: Colors.white),
+      ),
+      body: user == null
+          ? const Center(child: Text("Please sign in to view capsules"))
+          : StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('capsules')
+                  .where('memberIds', arrayContains: user.uid)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                final docs = snapshot.data!.docs;
+
+                if (docs.isEmpty) {
+                  return const Center(child: Text("No capsules found."));
+                }
+
+                return ListView.builder(
+                  itemCount: docs.length,
+                  padding: const EdgeInsets.all(16),
+                  itemBuilder: (context, index) {
+                    final data = docs[index].data() as Map<String, dynamic>;
+                    final title = data['name'] ?? '';
+                    final description = data['description'] ?? '';
+                    final unlockDate = (data['unlockDate'] as Timestamp).toDate();
+                    final isUnlocked = DateTime.now().isAfter(unlockDate);
+
+                    return CapsuleCard(
+                      title: title,
+                      description: description,
+                      unlockDate: unlockDate,
+                      isUnlocked: isUnlocked,
+                      onTap: isUnlocked
+                          ? () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => CapsuleDetailScreen(
+                                    capsuleId: docs[index].id, isUnlocked: isUnlocked,
+                                  ),
+                                ),
+                              );
+                            }
+                          : null,
+                    );
+                  },
+                );
+              },
+            ),
+    );
+  }
+}
+
+class CapsuleCard extends StatelessWidget {
   final String title;
   final String description;
   final DateTime unlockDate;
-  final bool isOpened;
+  final bool isUnlocked;
+  final VoidCallback? onTap;
 
-  Capsule({
+  const CapsuleCard({
     required this.title,
     required this.description,
     required this.unlockDate,
-    required this.isOpened,
+    required this.isUnlocked,
+    this.onTap,
+    super.key,
   });
-}
 
-final List<Capsule> dummyCapsules = [
-  Capsule(
-    title: "Time Capsule", description: "A journey through time ", unlockDate: DateTime(2025, 1, 1), isOpened: false),
-    Capsule(title: "College days", description: "Memories with friends", unlockDate: DateTime(2024, 9, 15), isOpened: true),
-
-];
-
-class _HomeScreen extends State<HomeScreen>{
-  @override 
-  Widget build(BuildContext context){
-    return Scaffold(
-      floatingActionButton: FloatingActionButton(onPressed: (){
-        Navigator.push(context, MaterialPageRoute(builder: (context) => CreateCapsuleScreen(),));
-      },
-      backgroundColor: Colors.white,
-      child: Icon(Icons.add, color: Colors.black,)),
-      body: Padding(
-        padding: EdgeInsets.fromLTRB(16, 60, 16, 0),
-        child: ListView.builder(
-          itemCount: dummyCapsules.length,
-          itemBuilder: (context, index){
-            final capsule = dummyCapsules[index];
-            return Container(
-              margin: EdgeInsets.only(bottom: 16),
-              decoration: BoxDecoration(
-                color: Color(0xFF1E1E1E),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: ListTile(
-                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                title: Text(
-                  capsule.title,
+  @override
+  Widget build(BuildContext context) {
+    return Opacity(
+      opacity: isUnlocked ? 1 : 0.5,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Card(
+          margin: const EdgeInsets.only(bottom: 16),
+          color: Colors.grey[900],
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  description,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[300]),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  isUnlocked
+                      ? 'Unlocked 🎉'
+                      : 'Opens on ${unlockDate.toLocal().toString().split(' ')[0]}',
                   style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
+                    color: isUnlocked ? Colors.greenAccent : Colors.orangeAccent,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
-                subtitle: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    SizedBox(height: 4,),
-                    Text(
-                      capsule.description,
-                      style: TextStyle(color: Colors.grey[400]),
-
-                    ),
-                    SizedBox(height: 4,),
-                    Text(
-                      "Unlocks on ${capsule.unlockDate.toLocal().toString().split(' ')[0]}",
-                      style: TextStyle(color: Colors.grey[500], fontSize: 13),
-                    ),
-                  ],
-                ),
-                trailing: Icon(
-                  capsule.isOpened ? Icons.lock_open : Icons.lock,
-                  color: capsule.isOpened ? Colors.white : Colors.amber,
-                ),
-              ),
-            );
-          }),
+              ],
+            ),
+          ),
+        ),
       ),
     );
-    }
-    
-    }
+  }
+}

@@ -1,6 +1,4 @@
-import 'package:boxed_app/screens/home_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:boxed_app/widgets/buttons.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -46,9 +44,10 @@ class _AddMemoryScreenState extends State<AddMemoryScreen> {
       String? downloadUrl;
 
       if (memoryType == 'image') {
+        final fileName = DateTime.now().millisecondsSinceEpoch.toString();
         final storageRef = FirebaseStorage.instance
             .ref()
-            .child('capsules/$capsuleId/${DateTime.now().millisecondsSinceEpoch}.jpg');
+            .child('capsules/$capsuleId/memories/$fileName.jpg');
 
         final uploadTask = await storageRef.putFile(_selectedImageFile!);
         downloadUrl = await uploadTask.ref.getDownloadURL();

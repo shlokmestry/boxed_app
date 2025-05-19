@@ -25,7 +25,7 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
       lastDate: DateTime(now.year + 5),
       builder: (context, child) {
         return Theme(
-          data: ThemeData.dark(), // Apply dark mode to date picker
+          data: ThemeData.dark(),
           child: child!,
         );
       },
@@ -59,15 +59,21 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final docRef = await FirebaseFirestore.instance.collection('capsules').add({
-        'name': _nameController.text.trim(),
-        'description': _descriptionController.text.trim(),
-        'creatorId': user.uid,
-        'unlockDate': Timestamp.fromDate(_selectedDate!),
-        'memberIds': [user.uid],
-        'createdAt': Timestamp.now(),
-        'isLocked': true,
-      });
+      print("Sending capsule to Firestore...");
+      final docRef = await FirebaseFirestore.instance
+          .collection('capsules')
+          .add({
+            'name': _nameController.text.trim(),
+            'description': _descriptionController.text.trim(),
+            'creatorId': user.uid,
+            'unlockDate': Timestamp.fromDate(_selectedDate!),
+            'memberIds': [user.uid],
+            'createdAt': Timestamp.now(),
+            'isLocked': true,
+          })
+          .timeout(const Duration(seconds: 10));
+
+      print("Capsule created, navigating to AddMemoryScreen");
 
       Navigator.pushReplacement(
         context,
@@ -75,9 +81,11 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
           builder: (context) => AddMemoryScreen(capsuleId: docRef.id),
         ),
       );
-    } catch (e) {
+    } catch (e, stack) {
+      print("Error creating capsule: $e");
+      print("Stacktrace: $stack");
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error creating capsule: $e')),
+        SnackBar(content: Text("Error creating capsule: $e")),
       );
     } finally {
       setState(() => _isLoading = false);
@@ -158,7 +166,8 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
               onTap: _selectDate,
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
+                padding:
+                    const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
                 decoration: BoxDecoration(
                   color: Colors.grey[850],
                   borderRadius: BorderRadius.circular(12),
