@@ -37,7 +37,6 @@ class _HomeScreen extends State<HomeScreen>{
   Widget build(BuildContext context){
     return Scaffold(
       floatingActionButton: FloatingActionButton(onPressed: (){
-        print("Create capsule tapped!");
       },
       backgroundColor: Colors.white,
       child: Icon(Icons.add, color: Colors.black,)),

@@ -22,7 +22,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(),
       title: 'Boxed',
-      home:  AddMemoryScreen(capsuleId: 'll',),
+      home:  LoginSignup()
     );
   }
 }
