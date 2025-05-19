@@ -1,5 +1,11 @@
+import 'package:boxed_app/screens/home_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:boxed_app/widgets/buttons.dart'; // Adjust path if needed
+import 'package:boxed_app/widgets/buttons.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class AddMemoryScreen extends StatefulWidget {
   final String capsuleId;
@@ -13,7 +19,80 @@ class AddMemoryScreen extends StatefulWidget {
 class _AddMemoryScreenState extends State<AddMemoryScreen> {
   String memoryType = 'note';
   final TextEditingController _noteController = TextEditingController();
-  String? _selectedImagePath;
+  File? _selectedImageFile;
+  final ImagePicker _picker = ImagePicker();
+
+  Future<void> _uploadMemory() async {
+    if (memoryType == 'image' && _selectedImageFile == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select an image')),
+      );
+      return;
+    }
+
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+
+      if (user == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('You must be signed in to upload a memory')),
+        );
+        return;
+      }
+
+      final uid = user.uid;
+      final capsuleId = widget.capsuleId;
+      final timestamp = Timestamp.now();
+      String? downloadUrl;
+
+      if (memoryType == 'image') {
+        final storageRef = FirebaseStorage.instance
+            .ref()
+            .child('capsules/$capsuleId/${DateTime.now().millisecondsSinceEpoch}.jpg');
+
+        final uploadTask = await storageRef.putFile(_selectedImageFile!);
+        downloadUrl = await uploadTask.ref.getDownloadURL();
+      }
+
+      final memoryData = {
+        'type': memoryType,
+        'uploaderId': uid,
+        'timestamp': timestamp,
+        if (memoryType == 'image') 'contentUrl': downloadUrl,
+        if (memoryType == 'note') 'text': _noteController.text.trim(),
+      };
+
+      await FirebaseFirestore.instance
+          .collection('capsules')
+          .doc(capsuleId)
+          .collection('memories')
+          .add(memoryData);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Memory uploaded successfully')),
+      );
+
+      setState(() {
+        _noteController.clear();
+        _selectedImageFile = null;
+      });
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Upload failed: $e')),
+      );
+    }
+  }
+
+  Future<void> _pickImage() async {
+    final XFile? pickedFile =
+        await _picker.pickImage(source: ImageSource.gallery);
+
+    if (pickedFile != null) {
+      setState(() {
+        _selectedImageFile = File(pickedFile.path);
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -99,10 +178,8 @@ class _AddMemoryScreenState extends State<AddMemoryScreen> {
             if (memoryType == 'image') _buildImagePickerPlaceholder(),
             const SizedBox(height: 30),
             ElevatedButton(
-             
-              onPressed: () {
-                // Next step: implement upload logic
-              }, child: null,
+              onPressed: _uploadMemory,
+              child: const Text('Upload Memory'),
             ),
           ],
         ),
@@ -145,13 +222,39 @@ class _AddMemoryScreenState extends State<AddMemoryScreen> {
   Widget _buildImagePickerPlaceholder() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: const [
+      children: [
         Text(
-          "Image Picker (coming next step)",
-          style: TextStyle(color: Colors.grey),
+          "Pick an Image",
+          style: Theme.of(context).textTheme.bodyLarge,
         ),
-        SizedBox(height: 20),
-        Placeholder(fallbackHeight: 150),
+        const SizedBox(height: 10),
+        GestureDetector(
+          onTap: _pickImage,
+          child: Container(
+            width: double.infinity,
+            height: 180,
+            decoration: BoxDecoration(
+              color: Colors.grey[900],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.grey.shade700),
+            ),
+            child: _selectedImageFile == null
+                ? const Center(
+                    child: Text(
+                      "Tap to select image",
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  )
+                : ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.file(
+                      _selectedImageFile!,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                    ),
+                  ),
+          ),
+        ),
       ],
     );
   }

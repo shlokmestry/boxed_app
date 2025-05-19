@@ -1,3 +1,5 @@
+import 'package:boxed_app/screens/capsule_detail_screen.dart';
+import 'package:boxed_app/screens/create_capsule_screen.dart';
 import 'package:boxed_app/screens/login_signup.dart';
 import 'package:boxed_app/widgets/buttons.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -37,7 +39,7 @@ class _HomeScreen extends State<HomeScreen>{
   Widget build(BuildContext context){
     return Scaffold(
       floatingActionButton: FloatingActionButton(onPressed: (){
-        print("Create capsule tapped!");
+        Navigator.push(context, MaterialPageRoute(builder: (context) => CreateCapsuleScreen(),));
       },
       backgroundColor: Colors.white,
       child: Icon(Icons.add, color: Colors.black,)),
