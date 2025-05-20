@@ -1,6 +1,6 @@
 {
-    "name": "boxed_app",
-    "short_name": "boxed_app",
+    "name": "boxed_app_temp",
+    "short_name": "boxed_app_temp",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

@@ -44,10 +44,9 @@ class _AddMemoryScreenState extends State<AddMemoryScreen> {
       String? downloadUrl;
 
       if (memoryType == 'image') {
-        final fileName = DateTime.now().millisecondsSinceEpoch.toString();
         final storageRef = FirebaseStorage.instance
             .ref()
-            .child('capsules/$capsuleId/memories/$fileName.jpg');
+            .child('capsules/$capsuleId/${DateTime.now().millisecondsSinceEpoch}.jpg');
 
         final uploadTask = await storageRef.putFile(_selectedImageFile!);
         downloadUrl = await uploadTask.ref.getDownloadURL();
@@ -83,15 +82,130 @@ class _AddMemoryScreenState extends State<AddMemoryScreen> {
   }
 
   Future<void> _pickImage() async {
-    final XFile? pickedFile =
-        await _picker.pickImage(source: ImageSource.gallery);
-
+    final XFile? pickedFile = await _picker.pickImage(source: ImageSource.gallery);
     if (pickedFile != null) {
       setState(() {
         _selectedImageFile = File(pickedFile.path);
       });
     }
   }
+
+  void _showInviteDialog() {
+  final TextEditingController _emailController = TextEditingController();
+
+  showDialog(
+    context: context,
+    builder: (context) {
+      final width = MediaQuery.of(context).size.width * 0.9;
+      return Dialog(
+        backgroundColor: Colors.grey[900],
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        child: Container(
+          width: width,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Center(
+                child: Text(
+                  'Invite Collaborator',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              TextField(
+                controller: _emailController,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  hintText: 'Enter email address',
+                  hintStyle: const TextStyle(color: Colors.grey),
+                  filled: true,
+                  fillColor: Colors.grey[850],
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text(
+                      'Cancel',
+                      style: TextStyle(color: Colors.white70),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    onPressed: () async {
+                      final email = _emailController.text.trim();
+                      Navigator.pop(context);
+
+                      if (email.isEmpty) return;
+
+                      try {
+                        final userQuery = await FirebaseFirestore.instance
+                            .collection('users')
+                            .where('email', isEqualTo: email)
+                            .limit(1)
+                            .get();
+
+                        if (userQuery.docs.isEmpty) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('No user found with that email')),
+                          );
+                          return;
+                        }
+
+                        final invitedUserId = userQuery.docs.first.id;
+
+                        await FirebaseFirestore.instance
+                            .collection('capsules')
+                            .doc(widget.capsuleId)
+                            .update({
+                          'memberIds': FieldValue.arrayUnion([invitedUserId]),
+                        });
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('User invited successfully')),
+                        );
+                      } catch (e) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('Failed to invite: $e')),
+                        );
+                      }
+                    },
+                    child: const Text(
+                      'Invite',
+                      style: TextStyle(fontWeight: FontWeight.w500, color: Colors.white),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+  );
+}
+
 
   @override
   Widget build(BuildContext context) {
@@ -179,6 +293,14 @@ class _AddMemoryScreenState extends State<AddMemoryScreen> {
             ElevatedButton(
               onPressed: _uploadMemory,
               child: const Text('Upload Memory'),
+            ),
+            const SizedBox(height: 20),
+            TextButton(
+              onPressed: _showInviteDialog,
+              child: const Text(
+                'Invite Collaborator',
+                style: TextStyle(color: Colors.blueAccent),
+              ),
             ),
           ],
         ),
