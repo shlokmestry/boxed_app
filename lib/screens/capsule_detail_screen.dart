@@ -19,44 +19,54 @@ class CapsuleDetailScreen extends StatefulWidget {
 
 class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
   DateTime? _unlockDate;
+  String? _capsuleTitle;
+  String? _capsuleDescription;
   Timer? _timer;
   Duration _remaining = Duration.zero;
 
   @override
   void initState() {
     super.initState();
-    if (!widget.isUnlocked) {
-      _fetchUnlockDate();
-    }
+    _fetchCapsuleDetails();
   }
 
-  void _fetchUnlockDate() async {
+  void _fetchCapsuleDetails() async {
     final doc = await FirebaseFirestore.instance
         .collection('capsules')
         .doc(widget.capsuleId)
         .get();
 
-    final ts = doc.data()?['unlockDate'];
+    final data = doc.data();
+    if (data == null) return;
+
+    final ts = data['unlockDate'];
+    final title = data['name'];
+    final description = data['description'];
+
     if (ts != null) {
       final date = (ts as Timestamp).toDate();
       setState(() {
         _unlockDate = date;
+        _capsuleTitle = title;
+        _capsuleDescription = description;
         _remaining = date.difference(DateTime.now());
       });
 
-      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-        final newDuration = date.difference(DateTime.now());
-        if (newDuration.isNegative) {
-          _timer?.cancel();
-          setState(() {
-            _remaining = Duration.zero;
-          });
-        } else {
-          setState(() {
-            _remaining = newDuration;
-          });
-        }
-      });
+      if (!widget.isUnlocked) {
+        _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+          final newDuration = date.difference(DateTime.now());
+          if (newDuration.isNegative) {
+            _timer?.cancel();
+            setState(() {
+              _remaining = Duration.zero;
+            });
+          } else {
+            setState(() {
+              _remaining = newDuration;
+            });
+          }
+        });
+      }
     }
   }
 
@@ -102,6 +112,12 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
                     ),
               ),
               const SizedBox(height: 10),
+              if (_capsuleTitle != null)
+                Text(
+                  _capsuleTitle!,
+                  style: const TextStyle(fontSize: 18, color: Colors.white70),
+                ),
+              const SizedBox(height: 10),
               if (_unlockDate != null)
                 Text(
                   'Unlocks on: ${DateFormat.yMMMd().add_jm().format(_unlockDate!)}',
@@ -135,45 +151,79 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
   Widget _buildUnlockedView() {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Capsule Memories"),
+        title: Text(_capsuleTitle ?? "Capsule"),
         centerTitle: true,
         backgroundColor: Colors.black,
       ),
       backgroundColor: Colors.black,
-      body: StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance
-            .collection('capsules')
-            .doc(widget.capsuleId)
-            .collection('memories')
-            .orderBy('timestamp', descending: false)
-            .snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (_capsuleDescription != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 20, 16, 0),
+              child: Text(
+                _capsuleDescription!,
+                style: const TextStyle(color: Colors.white70, fontSize: 16),
+              ),
+            ),
+          if (_unlockDate != null)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+              child: Text(
+                'Unlocked on: ${DateFormat.yMMMd().add_jm().format(_unlockDate!)}',
+                style: const TextStyle(color: Colors.greenAccent, fontSize: 14),
+              ),
+            ),
+          const Divider(color: Colors.grey),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('capsules')
+                  .doc(widget.capsuleId)
+                  .collection('memories')
+                  .orderBy('timestamp', descending: false)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-          if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(child: Text("No memories yet.", style: TextStyle(color: Colors.white70)));
-          }
+                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                  return const Center(
+                    child: Text("No memories yet.",
+                        style: TextStyle(color: Colors.white70)),
+                  );
+                }
 
-          final memories = snapshot.data!.docs;
+                final memories = snapshot.data!.docs;
 
-          return ListView.builder(
-            itemCount: memories.length,
-            itemBuilder: (context, index) {
-              final memory = memories[index].data() as Map<String, dynamic>;
-              final type = memory['type'];
+                return ListView.builder(
+                  itemCount: memories.length,
+                  itemBuilder: (context, index) {
+                    final memory = memories[index].data() as Map<String, dynamic>;
+                    final type = memory['type'];
 
-              if (type == 'note') {
-                return _buildNoteMemory(memory);
-              } else if (type == 'image') {
-                return _buildImageMemory(memory);
-              } else {
-                return const SizedBox.shrink();
-              }
-            },
-          );
+                    if (type == 'note') {
+                      return _buildNoteMemory(memory);
+                    } else if (type == 'image') {
+                      return _buildImageMemory(memory);
+                    } else {
+                      return const SizedBox.shrink();
+                    }
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        backgroundColor: Colors.blueAccent,
+        onPressed: () {
+          // TODO: Navigate to AddMemoryScreen if needed
         },
+        child: const Icon(Icons.add),
       ),
     );
   }
