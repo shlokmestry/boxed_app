@@ -66,18 +66,17 @@ class _HomeScreenState extends State<HomeScreen> {
                       description: description,
                       unlockDate: unlockDate,
                       isUnlocked: isUnlocked,
-                      onTap: isUnlocked
-                          ? () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => CapsuleDetailScreen(
-                                    capsuleId: docs[index].id, isUnlocked: isUnlocked,
-                                  ),
-                                ),
-                              );
-                            }
-                          : null,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => CapsuleDetailScreen(
+                              capsuleId: docs[index].id,
+                              isUnlocked: isUnlocked,
+                            ),
+                          ),
+                        );
+                      },
                     );
                   },
                 );
@@ -105,41 +104,59 @@ class CapsuleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Opacity(
-      opacity: isUnlocked ? 1 : 0.5,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Card(
-          margin: const EdgeInsets.only(bottom: 16),
-          color: Colors.grey[900],
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white),
+    return GestureDetector(
+      onTap: onTap,
+      child: Card(
+        margin: const EdgeInsets.only(bottom: 16),
+        color: Colors.grey[900],
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: isUnlocked
+              ? Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      description,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[300]),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Unlocked',
+                      style: const TextStyle(
+                        color: Colors.greenAccent,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Center(
+                      child: Icon(Icons.lock_outline, size: 40, color: Colors.grey[400]),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Opens on ${unlockDate.toLocal().toString().split(' ')[0]}',
+                      style: const TextStyle(
+                        color: Colors.orangeAccent,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                Text(
-                  description,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[300]),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  isUnlocked
-                      ? 'Unlocked 🎉'
-                      : 'Opens on ${unlockDate.toLocal().toString().split(' ')[0]}',
-                  style: TextStyle(
-                    color: isUnlocked ? Colors.greenAccent : Colors.orangeAccent,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ],
-            ),
-          ),
         ),
       ),
     );

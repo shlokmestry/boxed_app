@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
+import 'dart:async';
 
 class CapsuleDetailScreen extends StatefulWidget {
   final String capsuleId;
@@ -16,37 +18,121 @@ class CapsuleDetailScreen extends StatefulWidget {
 }
 
 class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
+  DateTime? _unlockDate;
+  Timer? _timer;
+  Duration _remaining = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    if (!widget.isUnlocked) {
+      _fetchUnlockDate();
+    }
+  }
+
+  void _fetchUnlockDate() async {
+    final doc = await FirebaseFirestore.instance
+        .collection('capsules')
+        .doc(widget.capsuleId)
+        .get();
+
+    final ts = doc.data()?['unlockDate'];
+    if (ts != null) {
+      final date = (ts as Timestamp).toDate();
+      setState(() {
+        _unlockDate = date;
+        _remaining = date.difference(DateTime.now());
+      });
+
+      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+        final newDuration = date.difference(DateTime.now());
+        if (newDuration.isNegative) {
+          _timer?.cancel();
+          setState(() {
+            _remaining = Duration.zero;
+          });
+        } else {
+          setState(() {
+            _remaining = newDuration;
+          });
+        }
+      });
+    }
+  }
+
+  String _formatDuration(Duration duration) {
+    final days = duration.inDays;
+    final hours = duration.inHours % 24;
+    final minutes = duration.inMinutes % 60;
+    final seconds = duration.inSeconds % 60;
+    return '$days days $hours hrs $minutes min $seconds sec';
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (!widget.isUnlocked) {
-      return Scaffold(
-        appBar: AppBar(
-          title: const Text("Capsule Locked"),
-          centerTitle: true,
-          backgroundColor: Colors.black,
-        ),
-        backgroundColor: Colors.black,
-        body: const Center(
+    if (widget.isUnlocked) {
+      return _buildUnlockedView();
+    } else {
+      return _buildLockedView();
+    }
+  }
+
+  Widget _buildLockedView() {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.lock_outline, size: 60, color: Colors.grey),
-              SizedBox(height: 16),
+              const Icon(Icons.lock, size: 64, color: Colors.white),
+              const SizedBox(height: 20),
               Text(
-                "This capsule is still locked.",
-                style: TextStyle(color: Colors.white70, fontSize: 18),
+                "You're a bit early!",
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
               ),
-              SizedBox(height: 8),
-              Text(
-                "Come back later to view the memories!",
-                style: TextStyle(color: Colors.white38),
+              const SizedBox(height: 10),
+              if (_unlockDate != null)
+                Text(
+                  'Unlocks on: ${DateFormat.yMMMd().add_jm().format(_unlockDate!)}',
+                  style: const TextStyle(color: Colors.white70),
+                ),
+              const SizedBox(height: 20),
+              if (_unlockDate != null)
+                Text(
+                  '⏳ ${_formatDuration(_remaining)}',
+                  style: const TextStyle(color: Colors.blueAccent, fontSize: 18),
+                ),
+              const SizedBox(height: 40),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(context),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.blueAccent,
+                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text("Back", style: TextStyle(fontSize: 16)),
               ),
             ],
           ),
         ),
-      );
-    }
+      ),
+    );
+  }
 
+  Widget _buildUnlockedView() {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Capsule Memories"),
@@ -67,12 +153,7 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
           }
 
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(
-              child: Text(
-                "No memories yet.",
-                style: TextStyle(color: Colors.white54),
-              ),
-            );
+            return const Center(child: Text("No memories yet.", style: TextStyle(color: Colors.white70)));
           }
 
           final memories = snapshot.data!.docs;
@@ -88,7 +169,7 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
               } else if (type == 'image') {
                 return _buildImageMemory(memory);
               } else {
-                return const SizedBox.shrink(); // fallback
+                return const SizedBox.shrink();
               }
             },
           );
@@ -101,13 +182,14 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
     return Padding(
       padding: const EdgeInsets.all(16.0),
       child: Card(
-        color: Colors.grey[850],
+        color: Colors.grey[900],
+        elevation: 2,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Text(
             memory['text'] ?? '',
-            style: const TextStyle(color: Colors.white, fontSize: 16),
+            style: const TextStyle(fontSize: 16, color: Colors.white),
           ),
         ),
       ),

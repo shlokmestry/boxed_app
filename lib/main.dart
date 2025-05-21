@@ -1,3 +1,4 @@
+import 'package:boxed_app/screens/home_screen.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'firebase_options.dart';
@@ -79,7 +80,7 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(),
       title: 'Boxed',
-      home: const LoginSignup(),
+      home: HomeScreen(),
     );
   }
 }
