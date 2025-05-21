@@ -15,8 +15,12 @@ class LoginSignup extends StatefulWidget {
 class _LoginSignupState extends State<LoginSignup> {
   bool isLogin = true;
   bool obscurePassword = true;
+
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
+
+  String? emailError;
+  String? passwordError;
 
   @override
   void initState() {
@@ -38,6 +42,13 @@ class _LoginSignupState extends State<LoginSignup> {
   void _logFcmToken() async {
     String? token = await FirebaseMessaging.instance.getToken();
     print('📱 FCM Token: $token');
+  }
+
+  void _showFieldErrors({String? emailMsg, String? passwordMsg}) {
+    setState(() {
+      emailError = emailMsg;
+      passwordError = passwordMsg;
+    });
   }
 
   @override
@@ -75,22 +86,37 @@ class _LoginSignupState extends State<LoginSignup> {
               const SizedBox(height: 25),
               TextField(
                 controller: emailController,
+                onChanged: (_) {
+                  if (emailError != null) {
+                    setState(() => emailError = null);
+                  }
+                },
                 decoration: InputDecoration(
                   border: const OutlineInputBorder(),
                   hintText: 'Email',
+                  hintStyle: const TextStyle(color: Colors.white70),
+                  errorText: emailError,
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: const BorderSide(color: Colors.white),
                   ),
                 ),
+                style: const TextStyle(color: Colors.white),
               ),
               const SizedBox(height: 10),
               TextField(
                 controller: passwordController,
                 obscureText: obscurePassword,
+                onChanged: (_) {
+                  if (passwordError != null) {
+                    setState(() => passwordError = null);
+                  }
+                },
                 decoration: InputDecoration(
                   border: const OutlineInputBorder(),
                   hintText: 'Password',
+                  hintStyle: const TextStyle(color: Colors.white70),
+                  errorText: passwordError,
                   suffixIcon: IconButton(
                     onPressed: () {
                       setState(() {
@@ -101,6 +127,7 @@ class _LoginSignupState extends State<LoginSignup> {
                       obscurePassword
                           ? Icons.visibility_off
                           : Icons.visibility,
+                      color: Colors.white,
                     ),
                   ),
                   enabledBorder: OutlineInputBorder(
@@ -108,13 +135,22 @@ class _LoginSignupState extends State<LoginSignup> {
                     borderSide: const BorderSide(color: Colors.white),
                   ),
                 ),
+                style: const TextStyle(color: Colors.white),
               ),
               const SizedBox(height: 20),
               Buttons(
                 label: isLogin ? 'Log In' : 'Sign Up',
                 onPressed: () async {
-                  final email = emailController.text.trim();
+                  final email = emailController.text.trim().toLowerCase();
                   final password = passwordController.text.trim();
+
+                  if (email.isEmpty || password.isEmpty) {
+                    _showFieldErrors(
+                      emailMsg: email.isEmpty ? 'Please enter your email.' : null,
+                      passwordMsg: password.isEmpty ? 'Please enter your password.' : null,
+                    );
+                    return;
+                  }
 
                   try {
                     if (isLogin) {
@@ -148,7 +184,6 @@ class _LoginSignupState extends State<LoginSignup> {
                       }
                     }
 
-                    // Update last login after login/signup
                     final currentUser = FirebaseAuth.instance.currentUser;
                     if (currentUser != null) {
                       await FirebaseFirestore.instance
@@ -163,10 +198,39 @@ class _LoginSignupState extends State<LoginSignup> {
                       context,
                       MaterialPageRoute(builder: (_) => const HomeScreen()),
                     );
+                  } on FirebaseAuthException catch (e) {
+                    String message;
+                    switch (e.code) {
+                      case 'user-not-found':
+                        message = 'This email’s a stranger to us. Want to sign up instead?';
+                        break;
+                      case 'wrong-password':
+                      case 'invalid-credential':
+                        message = 'That password wasn’t quite right — give it another shot';
+                        break;
+                      case 'invalid-email':
+                        message = 'We love creativity, but that’s not a valid email';
+                        break;
+                      case 'email-already-in-use':
+                        message = 'Looks like you’ve already joined the Boxed club. Welcome back?';
+                        break;
+                      case 'weak-password':
+                        message = 'Your password needs a protein shake — at least 6 characters';
+                        break;
+                      default:
+                        message = 'Authentication error: ${e.message}';
+                    }
+
+                    // Assign errors to appropriate field
+                    if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
+                      _showFieldErrors(passwordMsg: message);
+                    } else if (e.code == 'user-not-found' || e.code == 'invalid-email' || e.code == 'email-already-in-use') {
+                      _showFieldErrors(emailMsg: message);
+                    } else {
+                      _showFieldErrors(emailMsg: message); // fallback
+                    }
                   } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(e.toString())),
-                    );
+                    _showFieldErrors(emailMsg: 'An unexpected error occurred. Please try again.');
                   }
                 },
               ),
@@ -184,6 +248,8 @@ class _LoginSignupState extends State<LoginSignup> {
                     onTap: () {
                       setState(() {
                         isLogin = !isLogin;
+                        emailError = null;
+                        passwordError = null;
                       });
                     },
                     child: Text(

@@ -1,3 +1,4 @@
+import 'package:boxed_app/screens/login_signup.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -55,9 +56,17 @@ class _HomeScreenState extends State<HomeScreen> {
           leading: const Icon(Icons.logout, color: Colors.redAccent),
           title: const Text('Sign Out', style: TextStyle(color: Colors.redAccent)),
           onTap: () async {
-            Navigator.pop(context);
-            await FirebaseAuth.instance.signOut();
-          },
+  Navigator.pop(context); // Close the drawer
+
+  await FirebaseAuth.instance.signOut();
+
+  Navigator.pushAndRemoveUntil(
+    context,
+    MaterialPageRoute(builder: (_) => const LoginSignup()),
+    (route) => false, 
+  );
+},
+
         ),
       ],
     ),
