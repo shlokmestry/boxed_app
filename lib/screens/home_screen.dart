@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:boxed_app/screens/create_capsule_screen.dart';
 import 'package:boxed_app/screens/capsule_detail_screen.dart';
+import 'package:boxed_app/screens/profile_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -22,6 +23,47 @@ class _HomeScreenState extends State<HomeScreen> {
         backgroundColor: Colors.black,
         centerTitle: true,
       ),
+      endDrawer: Drawer(
+  backgroundColor: Colors.grey[900],
+  child: SafeArea(
+    child: ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        ListTile(
+          leading: const Icon(Icons.person, color: Colors.white),
+          title: const Text('My Profile', style: TextStyle(color: Colors.white)),
+          onTap: () {
+            Navigator.pop(context);
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ProfileScreen()),
+            );
+          },
+        ),
+        ListTile(
+          leading: const Icon(Icons.settings, color: Colors.white),
+          title: const Text('Settings', style: TextStyle(color: Colors.white)),
+          onTap: () {
+            Navigator.pop(context);
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Settings coming soon")),
+            );
+          },
+        ),
+        const Divider(color: Colors.white24),
+        ListTile(
+          leading: const Icon(Icons.logout, color: Colors.redAccent),
+          title: const Text('Sign Out', style: TextStyle(color: Colors.redAccent)),
+          onTap: () async {
+            Navigator.pop(context);
+            await FirebaseAuth.instance.signOut();
+          },
+        ),
+      ],
+    ),
+  ),
+),
+
       backgroundColor: Colors.black,
       floatingActionButton: FloatingActionButton(
         onPressed: () {
@@ -34,7 +76,9 @@ class _HomeScreenState extends State<HomeScreen> {
         child: const Icon(Icons.add, color: Colors.white),
       ),
       body: user == null
-          ? const Center(child: Text("Please sign in to view capsules"))
+          ? const Center(
+              child: Text("Please sign in to view capsules", style: TextStyle(color: Colors.white)),
+            )
           : StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('capsules')
@@ -48,7 +92,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 final docs = snapshot.data!.docs;
 
                 if (docs.isEmpty) {
-                  return const Center(child: Text("No capsules found."));
+                  return const Center(
+                    child: Text("No capsules found.", style: TextStyle(color: Colors.white)),
+                  );
                 }
 
                 return ListView.builder(
@@ -126,9 +172,9 @@ class CapsuleCard extends StatelessWidget {
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[300]),
                     ),
                     const SizedBox(height: 12),
-                    Text(
+                    const Text(
                       'Unlocked',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: Colors.greenAccent,
                         fontWeight: FontWeight.w500,
                       ),
@@ -138,9 +184,7 @@ class CapsuleCard extends StatelessWidget {
               : Column(
                   crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Center(
-                      child: Icon(Icons.lock_outline, size: 40, color: Colors.grey[400]),
-                    ),
+                    const Icon(Icons.lock_outline, size: 40, color: Colors.white70),
                     const SizedBox(height: 12),
                     Text(
                       title,

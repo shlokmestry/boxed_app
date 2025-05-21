@@ -131,23 +131,30 @@ class _LoginSignupState extends State<LoginSignup> {
 
                       final user = credential.user;
                       if (user != null) {
+                        final now = Timestamp.now();
                         await FirebaseFirestore.instance
                             .collection('users')
                             .doc(user.uid)
                             .set({
+                          'firstName': '',
+                          'lastName': '',
+                          'username': user.email!.split('@')[0],
                           'email': user.email,
-                          'createdAt': Timestamp.now(),
+                          'photoUrl': null,
+                          'bio': '',
+                          'createdAt': now,
+                          'darkMode': false,
                         }, SetOptions(merge: true));
                       }
                     }
 
+                    // Update last login after login/signup
                     final currentUser = FirebaseAuth.instance.currentUser;
                     if (currentUser != null) {
                       await FirebaseFirestore.instance
                           .collection('users')
                           .doc(currentUser.uid)
                           .set({
-                        'email': currentUser.email,
                         'lastLogin': Timestamp.now(),
                       }, SetOptions(merge: true));
                     }
