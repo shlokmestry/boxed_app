@@ -1,4 +1,3 @@
-import 'package:boxed_app/screens/login_signup.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -23,56 +22,53 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Text('My Capsules'),
         backgroundColor: Colors.black,
         centerTitle: true,
+        leading: Builder(
+          builder: (context) => IconButton(
+            icon: const Icon(Icons.menu),
+            onPressed: () => Scaffold.of(context).openDrawer(),
+          ),
+        ),
       ),
-      endDrawer: Drawer(
-  backgroundColor: Colors.grey[900],
-  child: SafeArea(
-    child: ListView(
-      padding: EdgeInsets.zero,
-      children: [
-        ListTile(
-          leading: const Icon(Icons.person, color: Colors.white),
-          title: const Text('My Profile', style: TextStyle(color: Colors.white)),
-          onTap: () {
-            Navigator.pop(context);
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const ProfileScreen()),
-            );
-          },
+      drawer: Drawer(
+        backgroundColor: Colors.grey[900],
+        child: SafeArea(
+          child: ListView(
+            padding: EdgeInsets.zero,
+            children: [
+              ListTile(
+                leading: const Icon(Icons.person, color: Colors.white),
+                title: const Text('My Profile', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                  );
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.settings, color: Colors.white),
+                title: const Text('Settings', style: TextStyle(color: Colors.white)),
+                onTap: () {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Settings coming soon")),
+                  );
+                },
+              ),
+              const Divider(color: Colors.white24),
+              ListTile(
+                leading: const Icon(Icons.logout, color: Colors.redAccent),
+                title: const Text('Sign Out', style: TextStyle(color: Colors.redAccent)),
+                onTap: () async {
+                  Navigator.pop(context);
+                  await FirebaseAuth.instance.signOut();
+                },
+              ),
+            ],
+          ),
         ),
-        ListTile(
-          leading: const Icon(Icons.settings, color: Colors.white),
-          title: const Text('Settings', style: TextStyle(color: Colors.white)),
-          onTap: () {
-            Navigator.pop(context);
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Settings coming soon")),
-            );
-          },
-        ),
-        const Divider(color: Colors.white24),
-        ListTile(
-          leading: const Icon(Icons.logout, color: Colors.redAccent),
-          title: const Text('Sign Out', style: TextStyle(color: Colors.redAccent)),
-          onTap: () async {
-  Navigator.pop(context); // Close the drawer
-
-  await FirebaseAuth.instance.signOut();
-
-  Navigator.pushAndRemoveUntil(
-    context,
-    MaterialPageRoute(builder: (_) => const LoginSignup()),
-    (route) => false, 
-  );
-},
-
-        ),
-      ],
-    ),
-  ),
-),
-
+      ),
       backgroundColor: Colors.black,
       floatingActionButton: FloatingActionButton(
         onPressed: () {
@@ -86,8 +82,7 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: user == null
           ? const Center(
-              child: Text("Please sign in to view capsules", style: TextStyle(color: Colors.white)),
-            )
+              child: Text("Please sign in to view capsules", style: TextStyle(color: Colors.white)))
           : StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('capsules')
@@ -101,9 +96,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 final docs = snapshot.data!.docs;
 
                 if (docs.isEmpty) {
-                  return const Center(
-                    child: Text("No capsules found.", style: TextStyle(color: Colors.white)),
-                  );
+                  return const Center(child: Text("No capsules found.", style: TextStyle(color: Colors.white)));
                 }
 
                 return ListView.builder(
@@ -167,49 +160,43 @@ class CapsuleCard extends StatelessWidget {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         child: Padding(
           padding: const EdgeInsets.all(16),
-          child: isUnlocked
-              ? Column(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       title,
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     Text(
                       description,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[300]),
-                    ),
-                    const SizedBox(height: 12),
-                    const Text(
-                      'Unlocked',
-                      style: TextStyle(
-                        color: Colors.greenAccent,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.lock_outline, size: 40, color: Colors.white70),
-                    const SizedBox(height: 12),
-                    Text(
-                      title,
-                      textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Opens on ${unlockDate.toLocal().toString().split(' ')[0]}',
-                      style: const TextStyle(
-                        color: Colors.orangeAccent,
-                        fontWeight: FontWeight.w500,
-                      ),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[400]),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: isUnlocked ? Colors.green.shade700 : Colors.grey.shade800,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  isUnlocked ? 'UNLOCKED' : 'LOCKED',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
