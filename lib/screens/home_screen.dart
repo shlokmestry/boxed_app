@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:boxed_app/screens/create_capsule_screen.dart';
 import 'package:boxed_app/screens/capsule_detail_screen.dart';
 import 'package:boxed_app/screens/profile_screen.dart';
+import 'package:intl/intl.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -106,12 +107,13 @@ class _HomeScreenState extends State<HomeScreen> {
                     final data = docs[index].data() as Map<String, dynamic>;
                     final title = data['name'] ?? '';
                     final description = data['description'] ?? '';
+                    final emoji = data['emoji'] ?? ''; // Optional: store emoji in capsule
                     final unlockDate = (data['unlockDate'] as Timestamp).toDate();
                     final isUnlocked = DateTime.now().isAfter(unlockDate);
 
                     return CapsuleCard(
                       title: title,
-                      description: description,
+                      emoji: emoji,
                       unlockDate: unlockDate,
                       isUnlocked: isUnlocked,
                       onTap: () {
@@ -136,14 +138,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
 class CapsuleCard extends StatelessWidget {
   final String title;
-  final String description;
+  final String emoji;
   final DateTime unlockDate;
   final bool isUnlocked;
   final VoidCallback? onTap;
 
   const CapsuleCard({
     required this.title,
-    required this.description,
+    required this.emoji,
     required this.unlockDate,
     required this.isUnlocked,
     this.onTap,
@@ -152,14 +154,18 @@ class CapsuleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final unlockLabel = isUnlocked
+        ? 'Unlocked on ${DateFormat.yMMMd().format(unlockDate)}'
+        : 'Unlocks in ${_formatCountdown(unlockDate)}';
+
     return GestureDetector(
       onTap: onTap,
       child: Card(
-        margin: const EdgeInsets.only(bottom: 16),
         color: Colors.grey[900],
+        margin: const EdgeInsets.only(bottom: 16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -168,37 +174,49 @@ class CapsuleCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      title,
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(color: Colors.white),
+                      '$emoji $title',
+                      style: const TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      description,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.grey[400]),
-                      overflow: TextOverflow.ellipsis,
+                      unlockLabel,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Colors.white60,
+                      ),
                     ),
                   ],
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: isUnlocked ? Colors.green.shade700 : Colors.grey.shade800,
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  isUnlocked ? 'UNLOCKED' : 'LOCKED',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
+isUnlocked
+  ? const Icon(Icons.lock_open_rounded, color: Colors.greenAccent)
+
+
+  : const Icon(Icons.lock_outline, color: Colors.white60),
+
             ],
           ),
         ),
       ),
     );
+  }
+
+  String _formatCountdown(DateTime date) {
+    final now = DateTime.now();
+    final diff = date.difference(now);
+
+    if (diff.inDays > 0) {
+      return '${diff.inDays} day${diff.inDays == 1 ? '' : 's'}';
+    } else if (diff.inHours > 0) {
+      return '${diff.inHours} hour${diff.inHours == 1 ? '' : 's'}';
+    } else if (diff.inMinutes > 0) {
+      return '${diff.inMinutes} minute${diff.inMinutes == 1 ? '' : 's'}';
+    } else {
+      return 'less than a minute';
+    }
   }
 }
