@@ -1,10 +1,17 @@
+import 'package:boxed_app/screens/edit_profile_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:share_plus/share_plus.dart';
 
-class ProfileScreen extends StatelessWidget {
+class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
 
+  @override
+  State<ProfileScreen> createState() => _ProfileScreenState();
+}
+
+class _ProfileScreenState extends State<ProfileScreen> {
   Future<DocumentSnapshot?> _getUserProfile() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return null;
@@ -20,6 +27,18 @@ class ProfileScreen extends StatelessWidget {
         title: const Text("My Profile"),
         centerTitle: true,
         backgroundColor: Colors.black,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.share),
+            onPressed: () async {
+              final doc = await _getUserProfile();
+              final data = doc?.data() as Map<String, dynamic>?;
+              final username = data?['username'] ?? 'myprofile';
+              final shareLink = "https://boxed.app/u/$username";
+              Share.share("Check out my Boxed profile: $shareLink");
+            },
+          ),
+        ],
       ),
       backgroundColor: Colors.black,
       body: FutureBuilder<DocumentSnapshot?>(
@@ -40,92 +59,83 @@ class ProfileScreen extends StatelessWidget {
           final username = data['username'] ?? '';
           final email = data['email'] ?? '';
           final photoUrl = data['photoUrl'];
-          final bio = data['bio'] ?? '';
           final createdAt = data['createdAt']?.toDate();
-
           final fullName = "$firstName $lastName";
 
-          return SingleChildScrollView(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              children: [
-                CircleAvatar(
-                  radius: 48,
-                  backgroundImage: photoUrl != null ? NetworkImage(photoUrl) : null,
-                  backgroundColor: Colors.grey[800],
-                  child: photoUrl == null
-                      ? Text(
-                          "${firstName.isNotEmpty ? firstName[0] : ''}${lastName.isNotEmpty ? lastName[0] : ''}".toUpperCase(),
-                          style: const TextStyle(fontSize: 28, color: Colors.white),
-                        )
-                      : null,
-                ),
-                const SizedBox(height: 16),
-                Text(fullName, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 4),
-                Text("@$username", style: const TextStyle(color: Colors.grey, fontSize: 16)),
-                const SizedBox(height: 16),
-                if (email.isNotEmpty) Text(email, style: const TextStyle(color: Colors.grey)),
-                if (createdAt != null)
-                  Text("Member since ${createdAt.month}/${createdAt.year}", style: const TextStyle(color: Colors.grey)),
-                const SizedBox(height: 16),
-                if (bio.isNotEmpty)
-                  Text(
-                    bio,
-                    style: const TextStyle(color: Colors.white70),
-                    textAlign: TextAlign.center,
+          return Column(
+            children: [
+              const SizedBox(height: 24),
+              CircleAvatar(
+                radius: 48,
+                backgroundImage: (photoUrl != null && photoUrl != '') ? NetworkImage(photoUrl) : null,
+                backgroundColor: Colors.grey[800],
+                child: (photoUrl == null || photoUrl == '')
+                    ? Text(
+                        "${firstName.isNotEmpty ? firstName[0] : ''}${lastName.isNotEmpty ? lastName[0] : ''}".toUpperCase(),
+                        style: const TextStyle(fontSize: 28, color: Colors.white),
+                      )
+                    : null,
+              ),
+              const SizedBox(height: 16),
+              Text(username, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text("0 achievements", style: TextStyle(color: Colors.grey)),
+                  const SizedBox(width: 8),
+                  const Text("•", style: TextStyle(color: Colors.grey)),
+                  const SizedBox(width: 8),
+                  const Text("0 followers", style: TextStyle(color: Colors.grey)),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (email.isNotEmpty) Text("u/$email", style: const TextStyle(color: Colors.grey)),
+              if (createdAt != null)
+                Text("${createdAt.month}/${createdAt.year}", style: const TextStyle(color: Colors.grey)),
+              const SizedBox(height: 20),
+              ElevatedButton(
+                onPressed: () async {
+                  await Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const EditProfileScreen()),
+                  );
+                  setState(() {}); // Refresh after returning from edit screen
+                },
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
+                child: const Text("Edit Profile"),
+              ),
+              const SizedBox(height: 24),
+              Column(
+                children: const [
+                  Divider(
+                    color: Colors.white24,
+                    thickness: 0.5,
+                    height: 32,
+                    indent: 24,
+                    endIndent: 24,
                   ),
-                const SizedBox(height: 24),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    _buildStat("Capsules", 0),
-                    const SizedBox(width: 24),
-                    _buildStat("Memories", 0),
-                  ],
+                  Text(
+                    "Your Capsules",
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  SizedBox(height: 12),
+                ],
+              ),
+              const SizedBox(height: 16),
+              const Expanded(
+                child: Center(
+                  child: Text("Start your first memory capsule 🎁", style: TextStyle(color: Colors.white54)),
                 ),
-                const SizedBox(height: 32),
-                ElevatedButton(
-                  onPressed: () {
-                    // TODO: Navigate to edit profile screen
-                  },
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
-                  child: const Text("Edit Profile"),
-                ),
-                const SizedBox(height: 16),
-                SwitchListTile(
-                  value: false, // TODO: Load from user settings
-                  onChanged: (value) {
-                    // TODO: Toggle dark mode preference
-                  },
-                  title: const Text("Dark Mode", style: TextStyle(color: Colors.white)),
-                  activeColor: Colors.blueAccent,
-                ),
-                const SizedBox(height: 24),
-                TextButton(
-                  onPressed: () async {
-                    await FirebaseAuth.instance.signOut();
-                    Navigator.popUntil(context, (route) => route.isFirst);
-                  },
-                  child: const Text("Sign Out", style: TextStyle(color: Colors.redAccent)),
-                )
-              ],
-            ),
+              ),
+            ],
           );
         },
       ),
-    );
-  }
-
-  Widget _buildStat(String label, int count) {
-    return Column(
-      children: [
-        Text(
-          count.toString(),
-          style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        Text(label, style: const TextStyle(color: Colors.grey)),
-      ],
     );
   }
 }
