@@ -31,14 +31,32 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       drawer: Drawer(
-        backgroundColor: Colors.grey[900],
+        backgroundColor: Colors.black,
         child: SafeArea(
-          child: ListView(
-            padding: EdgeInsets.zero,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ListTile(
-                leading: const Icon(Icons.person, color: Colors.white),
-                title: const Text('My Profile', style: TextStyle(color: Colors.white)),
+              const Padding(
+                padding: EdgeInsets.all(20),
+                child: Text(
+                  'Boxed',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white,
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              _DrawerButton(
+                icon: Icons.folder_special,
+                label: 'My Capsules',
+                onTap: () => Navigator.pop(context),
+              ),
+              _DrawerButton(
+                icon: Icons.person,
+                label: 'My Profile',
                 onTap: () {
                   Navigator.pop(context);
                   Navigator.push(
@@ -47,9 +65,39 @@ class _HomeScreenState extends State<HomeScreen> {
                   );
                 },
               ),
-              ListTile(
-                leading: const Icon(Icons.settings, color: Colors.white),
-                title: const Text('Settings', style: TextStyle(color: Colors.white)),
+              _DrawerButton(
+                icon: Icons.mail_outline,
+                label: 'Invites',
+                onTap: () {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Invites coming soon")),
+                  );
+                },
+              ),
+              _DrawerButton(
+                icon: Icons.group,
+                label: 'Shared With Me',
+                onTap: () {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Shared Capsules coming soon")),
+                  );
+                },
+              ),
+              _DrawerButton(
+                icon: Icons.color_lens_outlined,
+                label: 'Themes',
+                onTap: () {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Themes feature coming soon")),
+                  );
+                },
+              ),
+              _DrawerButton(
+                icon: Icons.settings,
+                label: 'Settings',
                 onTap: () {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -57,15 +105,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   );
                 },
               ),
-              const Divider(color: Colors.white24),
-              ListTile(
-                leading: const Icon(Icons.logout, color: Colors.redAccent),
-                title: const Text('Sign Out', style: TextStyle(color: Colors.redAccent)),
+              const Spacer(),
+              _DrawerButton(
+                icon: Icons.logout,
+                label: 'Sign Out',
+                iconColor: Colors.redAccent,
+                textColor: Colors.redAccent,
                 onTap: () async {
                   Navigator.pop(context);
                   await FirebaseAuth.instance.signOut();
                 },
               ),
+              const SizedBox(height: 20),
             ],
           ),
         ),
@@ -106,8 +157,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   itemBuilder: (context, index) {
                     final data = docs[index].data() as Map<String, dynamic>;
                     final title = data['name'] ?? '';
-                    final description = data['description'] ?? '';
-                    final emoji = data['emoji'] ?? ''; // Optional: store emoji in capsule
+                    final emoji = data['emoji'] ?? '';
                     final unlockDate = (data['unlockDate'] as Timestamp).toDate();
                     final isUnlocked = DateTime.now().isAfter(unlockDate);
 
@@ -192,12 +242,9 @@ class CapsuleCard extends StatelessWidget {
                   ],
                 ),
               ),
-isUnlocked
-  ? const Icon(Icons.lock_open_rounded, color: Colors.greenAccent)
-
-
-  : const Icon(Icons.lock_outline, color: Colors.white60),
-
+              isUnlocked
+                  ? const Icon(Icons.lock_open_rounded, color: Colors.greenAccent)
+                  : const Icon(Icons.lock_outline, color: Colors.white60),
             ],
           ),
         ),
@@ -218,5 +265,53 @@ isUnlocked
     } else {
       return 'less than a minute';
     }
+  }
+}
+
+class _DrawerButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color iconColor;
+  final Color textColor;
+
+  const _DrawerButton({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.iconColor = Colors.white,
+    this.textColor = Colors.white,
+    Key? key,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.grey[900],
+            borderRadius: BorderRadius.circular(12),
+          ),
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+          child: Row(
+            children: [
+              Icon(icon, color: iconColor),
+              const SizedBox(width: 16),
+              Text(
+                label,
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
