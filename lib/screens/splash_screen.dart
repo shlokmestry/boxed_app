@@ -1,3 +1,4 @@
+import 'package:boxed_app/screens/onboarding_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'home_screen.dart';
@@ -17,7 +18,7 @@ class _SplashScreenState extends State<SplashScreen> {
     Future.delayed(const Duration(seconds: 2), () {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const OnboardingScreen()));
       } else {
         Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginSignup()));
       }
