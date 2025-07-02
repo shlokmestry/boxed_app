@@ -1,10 +1,10 @@
 import 'dart:io';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:boxed_app/encryption/capsule_encryption.dart'; 
 
 class CreateCapsuleScreen extends StatefulWidget {
   const CreateCapsuleScreen({super.key});
@@ -18,6 +18,7 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _noteController = TextEditingController();
   final TextEditingController _collaboratorEmailController = TextEditingController();
+
   DateTime? _selectedDate;
   bool _isLoading = false;
   final List<File> _selectedImages = [];
@@ -61,99 +62,113 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
   }
 
   Future<void> _createCapsule() async {
-    if (_nameController.text.trim().isEmpty ||
-        _descriptionController.text.trim().isEmpty ||
-        _selectedDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please complete all fields')),
-      );
-      return;
-    }
-
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You must be signed in')),
-      );
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      final docRef = await FirebaseFirestore.instance.collection('capsules').add({
-        'name': _nameController.text.trim(),
-        'description': _descriptionController.text.trim(),
-        'creatorId': user.uid,
-        'unlockDate': Timestamp.fromDate(_selectedDate!),
-        'memberIds': [user.uid],
-        'createdAt': Timestamp.now(),
-        'isLocked': true,
-      });
-
-      for (final image in _selectedImages) {
-        final storageRef = FirebaseStorage.instance
-            .ref()
-            .child('capsules/${docRef.id}/${DateTime.now().millisecondsSinceEpoch}.jpg');
-        final uploadTask = await storageRef.putFile(image);
-        final downloadUrl = await uploadTask.ref.getDownloadURL();
-
-        await FirebaseFirestore.instance
-            .collection('capsules')
-            .doc(docRef.id)
-            .collection('memories')
-            .add({
-          'type': 'image',
-          'uploaderId': user.uid,
-          'timestamp': Timestamp.now(),
-          'contentUrl': downloadUrl,
-        });
-      }
-
-      if (_noteController.text.trim().isNotEmpty) {
-        await FirebaseFirestore.instance
-            .collection('capsules')
-            .doc(docRef.id)
-            .collection('memories')
-            .add({
-          'type': 'note',
-          'uploaderId': user.uid,
-          'timestamp': Timestamp.now(),
-          'text': _noteController.text.trim(),
-        });
-      }
-
-      final collaboratorEmail = _collaboratorEmailController.text.trim();
-      if (collaboratorEmail.isNotEmpty) {
-        final query = await FirebaseFirestore.instance
-            .collection('users')
-            .where('email', isEqualTo: collaboratorEmail)
-            .limit(1)
-            .get();
-        if (query.docs.isNotEmpty) {
-          final collaboratorId = query.docs.first.id;
-          await FirebaseFirestore.instance
-              .collection('capsules')
-              .doc(docRef.id)
-              .update({
-            'memberIds': FieldValue.arrayUnion([collaboratorId]),
-          });
-        }
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Capsule created successfully')),
-      );
-
-      Navigator.pop(context);
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error creating capsule: $e")),
-      );
-    } finally {
-      setState(() => _isLoading = false);
-    }
+  if (_nameController.text.trim().isEmpty ||
+      _descriptionController.text.trim().isEmpty ||
+      _selectedDate == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Please complete all fields')),
+    );
+    return;
   }
+
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('You must be signed in')),
+    );
+    return;
+  }
+
+  setState(() => _isLoading = true);
+
+  try {
+    // 🔐 Generate AES key
+    final aesKey = CapsuleEncryption.generateAESKey();
+
+    // 📦 Create capsule document
+    final docRef = await FirebaseFirestore.instance.collection('capsules').add({
+      'name': _nameController.text.trim(),
+      'description': _descriptionController.text.trim(),
+      'creatorId': user.uid,
+      'unlockDate': Timestamp.fromDate(_selectedDate!),
+      'memberIds': [user.uid],
+      'createdAt': Timestamp.now(),
+      'isLocked': true,
+      'aesKey': aesKey, // <-- storing the AES key
+    });
+
+ 
+    for (final image in _selectedImages) {
+      final storageRef = FirebaseStorage.instance
+          .ref()
+          .child('capsules/${docRef.id}/${DateTime.now().millisecondsSinceEpoch}.jpg');
+      final uploadTask = await storageRef.putFile(image);
+      final downloadUrl = await uploadTask.ref.getDownloadURL();
+
+      await FirebaseFirestore.instance
+          .collection('capsules')
+          .doc(docRef.id)
+          .collection('memories')
+          .add({
+        'type': 'image',
+        'uploaderId': user.uid,
+        'timestamp': Timestamp.now(),
+        'contentUrl': downloadUrl,
+      });
+    }
+
+
+    if (_noteController.text.trim().isNotEmpty) {
+      final encryptedNote = CapsuleEncryption.encryptMemory(
+        _noteController.text.trim(),
+        aesKey,
+      );
+
+      await FirebaseFirestore.instance
+          .collection('capsules')
+          .doc(docRef.id)
+          .collection('memories')
+          .add({
+        'type': 'note',
+        'uploaderId': user.uid,
+        'timestamp': Timestamp.now(),
+        'encryptedText': encryptedNote,
+      });
+    }
+
+    
+    final collaboratorEmail = _collaboratorEmailController.text.trim();
+    if (collaboratorEmail.isNotEmpty) {
+      final query = await FirebaseFirestore.instance
+          .collection('users')
+          .where('email', isEqualTo: collaboratorEmail)
+          .limit(1)
+          .get();
+      if (query.docs.isNotEmpty) {
+        final collaboratorId = query.docs.first.id;
+        await FirebaseFirestore.instance
+            .collection('capsules')
+            .doc(docRef.id)
+            .update({
+          'memberIds': FieldValue.arrayUnion([collaboratorId]),
+        });
+      }
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Capsule created successfully')),
+    );
+
+    Navigator.pop(context);
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text("Error creating capsule: $e")),
+    );
+  } finally {
+    setState(() => _isLoading = false);
+  }
+}
+
 
   @override
   Widget build(BuildContext context) {

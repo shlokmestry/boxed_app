@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
+import 'package:boxed_app/encryption/capsule_encryption.dart'; 
 
 class CapsuleDetailScreen extends StatefulWidget {
   final String capsuleId;
@@ -21,9 +22,9 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
   DateTime? _unlockDate;
   String? _capsuleTitle;
   String? _capsuleDescription;
+  String? _aesKey; 
   Timer? _timer;
   Duration _remaining = Duration.zero;
-
   bool _showContent = false;
 
   @override
@@ -52,6 +53,7 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
     final ts = data['unlockDate'];
     final title = data['name'];
     final description = data['description'];
+    final key = data['aesKey'];
 
     if (ts != null) {
       final date = (ts as Timestamp).toDate();
@@ -59,6 +61,7 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
         _unlockDate = date;
         _capsuleTitle = title;
         _capsuleDescription = description;
+        _aesKey = key; 
         _remaining = date.difference(DateTime.now());
       });
 
@@ -167,7 +170,6 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Box icon animation
             AnimatedOpacity(
               duration: const Duration(milliseconds: 800),
               opacity: _showContent ? 1 : 0,
@@ -180,7 +182,6 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
                 ),
               ),
             ),
-            // Content animation
             AnimatedOpacity(
               duration: const Duration(milliseconds: 800),
               opacity: _showContent ? 1 : 0,
@@ -261,6 +262,18 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
   }
 
   Widget _buildNoteMemory(Map<String, dynamic> memory) {
+    String displayedText = '';
+
+    if (memory.containsKey('encryptedText') && _aesKey != null) {
+      try {
+        displayedText = CapsuleEncryption.decryptMemory(memory['encryptedText'], _aesKey!);
+      } catch (e) {
+        displayedText = '[Error decrypting note]';
+      }
+    } else if (memory.containsKey('text')) {
+      displayedText = memory['text'];
+    }
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Card(
@@ -270,7 +283,7 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Text(
-            memory['text'] ?? '',
+            displayedText,
             style: const TextStyle(fontSize: 16, color: Colors.white),
           ),
         ),
