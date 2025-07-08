@@ -168,14 +168,31 @@ class _LoginSignupState extends State<LoginSignup> {
                       final user = credential.user;
                       if (user != null) {
                         final now = Timestamp.now();
+                        final username = user.email!.split('@')[0];
+                        // Extract display name from email if possible
+                        String displayName = '';
+                        String firstName = '';
+                        String lastName = '';
+                        if (username.contains('.')) {
+                          final parts = username.split('.');
+                          firstName = parts[0];
+                          lastName = parts.length > 1 ? parts[1] : '';
+                          displayName = '${_capitalize(firstName)} ${_capitalize(lastName)}';
+                        } else {
+                          firstName = username;
+                          displayName = _capitalize(username);
+                        }
                         await FirebaseFirestore.instance
                             .collection('users')
                             .doc(user.uid)
                             .set({
-                          'firstName': '',
-                          'lastName': '',
-                          'username': user.email!.split('@')[0],
+                          'firstName': _capitalize(firstName),
+                          'lastName': _capitalize(lastName),
+                          'displayName': displayName,
+                          'username': username,
+                          'username_lowercase': username.toLowerCase(),
                           'email': user.email,
+                          'email_lowercase': user.email!.toLowerCase(),
                           'photoUrl': null,
                           'bio': '',
                           'createdAt': now,
@@ -221,15 +238,15 @@ class _LoginSignupState extends State<LoginSignup> {
                         message = 'Authentication error: ${e.message}';
                     }
 
-                    // Assign errors to appropriate field
                     if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
                       _showFieldErrors(passwordMsg: message);
                     } else if (e.code == 'user-not-found' || e.code == 'invalid-email' || e.code == 'email-already-in-use') {
                       _showFieldErrors(emailMsg: message);
                     } else {
-                      _showFieldErrors(emailMsg: message); // fallback
+                      _showFieldErrors(emailMsg: message);
                     }
                   } catch (e) {
+                    print('Login/SignUp error: $e');
                     _showFieldErrors(emailMsg: 'An unexpected error occurred. Please try again.');
                   }
                 },
@@ -267,5 +284,10 @@ class _LoginSignupState extends State<LoginSignup> {
         ),
       ),
     );
+  }
+
+  String _capitalize(String s) {
+    if (s.isEmpty) return '';
+    return s[0].toUpperCase() + s.substring(1);
   }
 }
