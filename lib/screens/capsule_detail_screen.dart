@@ -5,12 +5,10 @@ import 'dart:async';
 
 class CapsuleDetailScreen extends StatefulWidget {
   final String capsuleId;
-  final bool isUnlocked;
 
   const CapsuleDetailScreen({
     required this.capsuleId,
-    required this.isUnlocked,
-    Key? key,
+    Key? key, required ,
   }) : super(key: key);
 
   @override
@@ -23,21 +21,14 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
   String? _capsuleDescription;
   Timer? _timer;
   Duration _remaining = Duration.zero;
-
   bool _showContent = false;
+  bool _isUnlocked = false;
+  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
     _fetchCapsuleDetails();
-
-    if (widget.isUnlocked) {
-      Future.delayed(const Duration(milliseconds: 300), () {
-        setState(() {
-          _showContent = true;
-        });
-      });
-    }
   }
 
   void _fetchCapsuleDetails() async {
@@ -55,24 +46,43 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
 
     if (ts != null) {
       final date = (ts as Timestamp).toDate();
+      final now = DateTime.now();
+      final unlocked = now.isAfter(date);
       setState(() {
         _unlockDate = date;
         _capsuleTitle = title;
         _capsuleDescription = description;
-        _remaining = date.difference(DateTime.now());
+        _isUnlocked = unlocked;
+        _remaining = date.difference(now);
+        _loading = false;
       });
 
-      if (!widget.isUnlocked) {
-        _timer = Timer.periodic(const Duration(seconds: 1), (_) {
-          final newDuration = date.difference(DateTime.now());
-          if (newDuration.isNegative) {
-            _timer?.cancel();
+      _timer?.cancel();
+      _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+        final now = DateTime.now();
+        final unlockedNow = now.isAfter(date);
+        final newDuration = date.difference(now);
+        if (unlockedNow) {
+          _timer?.cancel();
+          setState(() {
+            _isUnlocked = true;
+            _showContent = true;
+            _remaining = Duration.zero;
+          });
+        } else {
+          setState(() {
+            _isUnlocked = false;
+            _remaining = newDuration;
+          });
+        }
+      });
+
+      // Show content animation if unlocked
+      if (unlocked) {
+        Future.delayed(const Duration(milliseconds: 300), () {
+          if (mounted) {
             setState(() {
-              _remaining = Duration.zero;
-            });
-          } else {
-            setState(() {
-              _remaining = newDuration;
+              _showContent = true;
             });
           }
         });
@@ -96,7 +106,13 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return widget.isUnlocked ? _buildUnlockedView() : _buildLockedView();
+    if (_loading) {
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+    return _isUnlocked ? _buildUnlockedView() : _buildLockedView();
   }
 
   Widget _buildLockedView() {
@@ -167,7 +183,6 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Box icon animation
             AnimatedOpacity(
               duration: const Duration(milliseconds: 800),
               opacity: _showContent ? 1 : 0,
@@ -180,7 +195,6 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
                 ),
               ),
             ),
-            // Content animation
             AnimatedOpacity(
               duration: const Duration(milliseconds: 800),
               opacity: _showContent ? 1 : 0,

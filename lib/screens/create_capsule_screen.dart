@@ -18,14 +18,14 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _noteController = TextEditingController();
   final TextEditingController _collaboratorEmailController = TextEditingController();
-  DateTime? _selectedDate;
+  DateTime? _selectedDateTime;
   bool _isLoading = false;
   final List<File> _selectedImages = [];
   final ImagePicker _picker = ImagePicker();
 
-  Future<void> _selectDate() async {
+  Future<void> _selectDateTime() async {
     final DateTime now = DateTime.now();
-    final DateTime? picked = await showDatePicker(
+    final DateTime? pickedDate = await showDatePicker(
       context: context,
       initialDate: now.add(const Duration(days: 1)),
       firstDate: now,
@@ -38,10 +38,29 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
       },
     );
 
-    if (picked != null) {
-      setState(() {
-        _selectedDate = picked;
-      });
+    if (pickedDate != null) {
+      final TimeOfDay? pickedTime = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay(hour: 12, minute: 0),
+        builder: (context, child) {
+          return Theme(
+            data: ThemeData.dark(),
+            child: child!,
+          );
+        },
+      );
+
+      if (pickedTime != null) {
+        setState(() {
+          _selectedDateTime = DateTime(
+            pickedDate.year,
+            pickedDate.month,
+            pickedDate.day,
+            pickedTime.hour,
+            pickedTime.minute,
+          );
+        });
+      }
     }
   }
 
@@ -63,7 +82,7 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
   Future<void> _createCapsule() async {
     if (_nameController.text.trim().isEmpty ||
         _descriptionController.text.trim().isEmpty ||
-        _selectedDate == null) {
+        _selectedDateTime == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please complete all fields')),
       );
@@ -85,7 +104,7 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
         'name': _nameController.text.trim(),
         'description': _descriptionController.text.trim(),
         'creatorId': user.uid,
-        'unlockDate': Timestamp.fromDate(_selectedDate!),
+        'unlockDate': Timestamp.fromDate(_selectedDateTime!),
         'memberIds': [user.uid],
         'createdAt': Timestamp.now(),
         'isLocked': true,
@@ -218,7 +237,7 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
             ),
             const SizedBox(height: 24),
             Text(
-              "Unlock Date",
+              "Unlock Date & Time",
               style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.w600,
@@ -226,7 +245,7 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
             ),
             const SizedBox(height: 8),
             GestureDetector(
-              onTap: _selectDate,
+              onTap: _selectDateTime,
               child: Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
@@ -235,9 +254,9 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  _selectedDate == null
-                      ? 'Select a future date'
-                      : 'Opens on: ${_selectedDate!.toLocal().toString().split(' ')[0]}',
+                  _selectedDateTime == null
+                      ? 'Select a future date & time'
+                      : 'Opens on: ${_selectedDateTime!.toLocal().toString().replaceFirst(".000", "")}',
                   style: const TextStyle(color: Colors.white70),
                 ),
               ),
