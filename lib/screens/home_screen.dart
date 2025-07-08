@@ -172,7 +172,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           MaterialPageRoute(
                             builder: (_) => CapsuleDetailScreen(
                               capsuleId: docs[index].id,
-                              isUnlocked: isUnlocked,
+                              // Remove isUnlocked; CapsuleDetailScreen should check unlock logic itself
                             ),
                           ),
                         );
