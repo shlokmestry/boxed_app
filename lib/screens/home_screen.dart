@@ -134,7 +134,11 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: user == null
           ? const Center(
-              child: Text("Please sign in to view capsules", style: TextStyle(color: Colors.white)))
+              child: Text(
+                "Please sign in to view capsules",
+                style: TextStyle(color: Colors.white),
+              ),
+            )
           : StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('capsules')
@@ -148,7 +152,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 final docs = snapshot.data!.docs;
 
                 if (docs.isEmpty) {
-                  return const Center(child: Text("No capsules found.", style: TextStyle(color: Colors.white)));
+                  return const Center(
+                    child: Text(
+                      "No capsules found.",
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  );
                 }
 
                 return ListView.builder(
@@ -172,7 +181,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           MaterialPageRoute(
                             builder: (_) => CapsuleDetailScreen(
                               capsuleId: docs[index].id,
-                              // Remove isUnlocked; CapsuleDetailScreen should check unlock logic itself
                             ),
                           ),
                         );

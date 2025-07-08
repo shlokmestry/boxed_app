@@ -56,8 +56,8 @@ class _LoginSignupState extends State<LoginSignup> {
     return Scaffold(
       backgroundColor: Colors.black,
       body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -169,7 +169,6 @@ class _LoginSignupState extends State<LoginSignup> {
                       if (user != null) {
                         final now = Timestamp.now();
                         final username = user.email!.split('@')[0];
-                        // Extract display name from email if possible
                         String displayName = '';
                         String firstName = '';
                         String lastName = '';

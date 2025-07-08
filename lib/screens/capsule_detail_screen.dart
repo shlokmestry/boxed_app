@@ -8,7 +8,7 @@ class CapsuleDetailScreen extends StatefulWidget {
 
   const CapsuleDetailScreen({
     required this.capsuleId,
-    Key? key, required ,
+    Key? key,
   }) : super(key: key);
 
   @override
@@ -120,48 +120,58 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
       backgroundColor: Colors.black,
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const Icon(Icons.lock, size: 64, color: Colors.white),
-              const SizedBox(height: 20),
+              const SizedBox(height: 24),
               Text(
                 "You're a bit early!",
                 style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
                     ),
+                textAlign: TextAlign.center,
               ),
               const SizedBox(height: 10),
               if (_capsuleTitle != null)
                 Text(
                   _capsuleTitle!,
-                  style: const TextStyle(fontSize: 18, color: Colors.white70),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: Colors.white70,
+                      ),
+                  textAlign: TextAlign.center,
                 ),
               const SizedBox(height: 10),
               if (_unlockDate != null)
                 Text(
                   'Unlocks on: ${DateFormat.yMMMd().add_jm().format(_unlockDate!)}',
                   style: const TextStyle(color: Colors.white70),
+                  textAlign: TextAlign.center,
                 ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 18),
               if (_unlockDate != null)
                 Text(
                   '⏳ ${_formatDuration(_remaining)}',
                   style: const TextStyle(color: Colors.blueAccent, fontSize: 18),
+                  textAlign: TextAlign.center,
                 ),
-              const SizedBox(height: 40),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blueAccent,
-                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+              const SizedBox(height: 36),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blueAccent,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
+                  child: const Text("Back", style: TextStyle(fontSize: 16)),
                 ),
-                child: const Text("Back", style: TextStyle(fontSize: 16)),
               ),
             ],
           ),
@@ -179,7 +189,7 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
         backgroundColor: Colors.black,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
