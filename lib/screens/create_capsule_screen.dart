@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:flutter_typeahead/flutter_typeahead.dart';
 
 class CreateCapsuleScreen extends StatefulWidget {
   const CreateCapsuleScreen({super.key});
@@ -17,11 +18,14 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _noteController = TextEditingController();
-  final TextEditingController _collaboratorEmailController = TextEditingController();
+  final TextEditingController _collaboratorSearchController = TextEditingController();
   DateTime? _selectedDateTime;
   bool _isLoading = false;
   final List<File> _selectedImages = [];
   final ImagePicker _picker = ImagePicker();
+
+  // List of selected collaborators (each is a map with uid, username_lowercase)
+  final List<Map<String, dynamic>> _collaborators = [];
 
   Future<void> _selectDateTime() async {
     final DateTime now = DateTime.now();
@@ -41,7 +45,7 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     if (pickedDate != null) {
       final TimeOfDay? pickedTime = await showTimePicker(
         context: context,
-        initialTime: TimeOfDay(hour: 12, minute: 0),
+        initialTime: const TimeOfDay(hour: 12, minute: 0),
         builder: (context, child) {
           return Theme(
             data: ThemeData.dark(),
@@ -79,6 +83,12 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     });
   }
 
+  void _removeCollaborator(Map<String, dynamic> collaborator) {
+    setState(() {
+      _collaborators.remove(collaborator);
+    });
+  }
+
   Future<void> _createCapsule() async {
     if (_nameController.text.trim().isEmpty ||
         _descriptionController.text.trim().isEmpty ||
@@ -100,12 +110,18 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     setState(() => _isLoading = true);
 
     try {
+      // Collect all member UIDs (creator + collaborators)
+      final memberIds = [
+        user.uid,
+        ..._collaborators.map((c) => c['uid']),
+      ];
+
       final docRef = await FirebaseFirestore.instance.collection('capsules').add({
         'name': _nameController.text.trim(),
         'description': _descriptionController.text.trim(),
         'creatorId': user.uid,
         'unlockDate': Timestamp.fromDate(_selectedDateTime!),
-        'memberIds': [user.uid],
+        'memberIds': memberIds,
         'createdAt': Timestamp.now(),
         'isLocked': true,
       });
@@ -142,24 +158,6 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
         });
       }
 
-      final collaboratorEmail = _collaboratorEmailController.text.trim();
-      if (collaboratorEmail.isNotEmpty) {
-        final query = await FirebaseFirestore.instance
-            .collection('users')
-            .where('email', isEqualTo: collaboratorEmail)
-            .limit(1)
-            .get();
-        if (query.docs.isNotEmpty) {
-          final collaboratorId = query.docs.first.id;
-          await FirebaseFirestore.instance
-              .collection('capsules')
-              .doc(docRef.id)
-              .update({
-            'memberIds': FieldValue.arrayUnion([collaboratorId]),
-          });
-        }
-      }
-
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Capsule created successfully')),
       );
@@ -172,6 +170,84 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     } finally {
       setState(() => _isLoading = false);
     }
+  }
+
+  Widget _buildCollaboratorSearch() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TypeAheadField<Map<String, dynamic>>(
+          controller: _collaboratorSearchController,
+          suggestionsCallback: (pattern) async {
+            if (pattern.isEmpty) return [];
+            final lowerPattern = pattern.toLowerCase();
+
+            // Only search by username_lowercase
+            final snap = await FirebaseFirestore.instance
+                .collection('users')
+                .where('username_lowercase', isGreaterThanOrEqualTo: lowerPattern)
+                .where('username_lowercase', isLessThan: lowerPattern + 'z')
+                .limit(10)
+                .get();
+
+            final users = <Map<String, dynamic>>[];
+            for (final doc in snap.docs) {
+              if (doc.id != FirebaseAuth.instance.currentUser?.uid &&
+                  !_collaborators.any((c) => c['uid'] == doc.id)) {
+                users.add({
+                  'uid': doc.id,
+                  'username_lowercase': doc['username_lowercase'],
+                });
+              }
+            }
+            return users;
+          },
+          builder: (context, controller, focusNode) {
+            return TextField(
+              controller: controller,
+              focusNode: focusNode,
+              style: const TextStyle(color: Colors.white),
+              decoration: InputDecoration(
+                hintText: 'Search username',
+                hintStyle: const TextStyle(color: Colors.grey),
+                filled: true,
+                fillColor: Colors.grey[850],
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: BorderSide.none,
+                ),
+                prefixIcon: const Icon(Icons.search, color: Colors.white54),
+              ),
+            );
+          },
+          itemBuilder: (context, suggestion) {
+            return ListTile(
+              title: Text(suggestion['username_lowercase']),
+            );
+          },
+          onSelected: (suggestion) {
+            setState(() {
+              _collaborators.add(suggestion);
+              _collaboratorSearchController.clear();
+            });
+          },
+          emptyBuilder: (context) => const Padding(
+            padding: EdgeInsets.all(8.0),
+            child: Text('No user found', style: TextStyle(color: Colors.white70)),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          children: _collaborators
+              .map((c) => Chip(
+                    label: Text(c['username_lowercase']),
+                    onDeleted: () => _removeCollaborator(c),
+                  ))
+              .toList(),
+        ),
+      ],
+    );
   }
 
   @override
@@ -333,28 +409,14 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        "Add Collaborator",
+                        "Add Collaborators",
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                               color: Colors.white,
                               fontWeight: FontWeight.w600,
                             ),
                       ),
                       const SizedBox(height: 8),
-                      TextField(
-                        controller: _collaboratorEmailController,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                          hintText: 'Email',
-                          hintStyle: const TextStyle(color: Colors.grey),
-                          filled: true,
-                          fillColor: Colors.grey[850],
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide.none,
-                          ),
-                        ),
-                      ),
+                      _buildCollaboratorSearch(),
                     ],
                   ),
                 ),
