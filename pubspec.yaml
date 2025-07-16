@@ -80,6 +80,9 @@ flutter:
       - assets/get_started.png
       - assets/unlock.png
       - assets/friends.png
+      - assets/basic_background1.jpg
+      - assets/basic_background2.webp
+      - assets/basic_background3.jpg
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images
