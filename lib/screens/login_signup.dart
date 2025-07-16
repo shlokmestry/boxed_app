@@ -154,10 +154,36 @@ class _LoginSignupState extends State<LoginSignup> {
 
                   try {
                     if (isLogin) {
-                      await FirebaseAuth.instance.signInWithEmailAndPassword(
+                      final credential = await FirebaseAuth.instance
+                          .signInWithEmailAndPassword(
                         email: email,
                         password: password,
                       );
+
+                      final user = credential.user;
+                      if (user != null) {
+                        // ✅ Check if Firestore user doc exists
+                        final userDoc = FirebaseFirestore.instance.collection('users').doc(user.uid);
+                        final snapshot = await userDoc.get();
+
+                        if (!snapshot.exists) {
+                          final now = Timestamp.now();
+                          final username = user.email!.split('@')[0];
+                          await userDoc.set({
+                            'username': username,
+                            'email': user.email,
+                            'createdAt': now,
+                            'displayName': _capitalize(username),
+                            'bio': '',
+                            'photoUrl': null,
+                            'darkMode': false,
+                          });
+                        }
+
+                        await userDoc.set({
+                          'lastLogin': Timestamp.now(),
+                        }, SetOptions(merge: true));
+                      }
                     } else {
                       final credential = await FirebaseAuth.instance
                           .createUserWithEmailAndPassword(
@@ -169,7 +195,7 @@ class _LoginSignupState extends State<LoginSignup> {
                       if (user != null) {
                         final now = Timestamp.now();
                         final username = user.email!.split('@')[0];
-                        // Extract display name from email if possible
+
                         String displayName = '';
                         String firstName = '';
                         String lastName = '';
@@ -182,6 +208,7 @@ class _LoginSignupState extends State<LoginSignup> {
                           firstName = username;
                           displayName = _capitalize(username);
                         }
+
                         await FirebaseFirestore.instance
                             .collection('users')
                             .doc(user.uid)
@@ -243,7 +270,7 @@ class _LoginSignupState extends State<LoginSignup> {
                     } else if (e.code == 'user-not-found' || e.code == 'invalid-email' || e.code == 'email-already-in-use') {
                       _showFieldErrors(emailMsg: message);
                     } else {
-                      _showFieldErrors(emailMsg: message);
+                      _showFieldErrors(emailMsg: message); // fallback
                     }
                   } catch (e) {
                     print('Login/SignUp error: $e');

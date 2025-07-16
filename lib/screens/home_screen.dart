@@ -5,6 +5,8 @@ import 'package:boxed_app/screens/create_capsule_screen.dart';
 import 'package:boxed_app/screens/capsule_detail_screen.dart';
 import 'package:boxed_app/screens/profile_screen.dart';
 import 'package:intl/intl.dart';
+import 'package:boxed_app/screens/settings_screen.dart';
+
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -98,11 +100,12 @@ class _HomeScreenState extends State<HomeScreen> {
               _DrawerButton(
                 icon: Icons.settings,
                 label: 'Settings',
-                onTap: () {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Settings coming soon")),
-                  );
+                 onTap: () {
+    Navigator.pop(context);
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const SettingsScreen()),
+    );
                 },
               ),
               const Spacer(),
