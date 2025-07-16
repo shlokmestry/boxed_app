@@ -4,6 +4,7 @@ import 'home_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:boxed_app/screens/choose_username_screen.dart';
 
 class LoginSignup extends StatefulWidget {
   const LoginSignup({super.key});
@@ -162,7 +163,6 @@ class _LoginSignupState extends State<LoginSignup> {
 
                       final user = credential.user;
                       if (user != null) {
-                        // ✅ Check if Firestore user doc exists
                         final userDoc = FirebaseFirestore.instance.collection('users').doc(user.uid);
                         final snapshot = await userDoc.get();
 
@@ -184,6 +184,11 @@ class _LoginSignupState extends State<LoginSignup> {
                           'lastLogin': Timestamp.now(),
                         }, SetOptions(merge: true));
                       }
+
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (_) => const HomeScreen()),
+                      );
                     } else {
                       final credential = await FirebaseAuth.instance
                           .createUserWithEmailAndPassword(
@@ -216,8 +221,6 @@ class _LoginSignupState extends State<LoginSignup> {
                           'firstName': _capitalize(firstName),
                           'lastName': _capitalize(lastName),
                           'displayName': displayName,
-                          'username': username,
-                          'username_lowercase': username.toLowerCase(),
                           'email': user.email,
                           'email_lowercase': user.email!.toLowerCase(),
                           'photoUrl': null,
@@ -225,23 +228,15 @@ class _LoginSignupState extends State<LoginSignup> {
                           'createdAt': now,
                           'darkMode': false,
                         }, SetOptions(merge: true));
+
+                        // ✅ Redirect to choose username screen
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(
+                              builder: (_) => const ChooseUsernameScreen()),
+                        );
                       }
                     }
-
-                    final currentUser = FirebaseAuth.instance.currentUser;
-                    if (currentUser != null) {
-                      await FirebaseFirestore.instance
-                          .collection('users')
-                          .doc(currentUser.uid)
-                          .set({
-                        'lastLogin': Timestamp.now(),
-                      }, SetOptions(merge: true));
-                    }
-
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(builder: (_) => const HomeScreen()),
-                    );
                   } on FirebaseAuthException catch (e) {
                     String message;
                     switch (e.code) {
@@ -267,10 +262,12 @@ class _LoginSignupState extends State<LoginSignup> {
 
                     if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
                       _showFieldErrors(passwordMsg: message);
-                    } else if (e.code == 'user-not-found' || e.code == 'invalid-email' || e.code == 'email-already-in-use') {
+                    } else if (e.code == 'user-not-found' ||
+                        e.code == 'invalid-email' ||
+                        e.code == 'email-already-in-use') {
                       _showFieldErrors(emailMsg: message);
                     } else {
-                      _showFieldErrors(emailMsg: message); // fallback
+                      _showFieldErrors(emailMsg: message);
                     }
                   } catch (e) {
                     print('Login/SignUp error: $e');

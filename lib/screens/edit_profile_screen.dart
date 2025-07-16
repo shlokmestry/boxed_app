@@ -24,6 +24,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String? _photoUrl;
 
   bool _isLoading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -38,19 +39,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
     final data = doc.data();
 
-    if (data != null) {
-      setState(() {
-        _firstName = data['firstName'] ?? '';
-        _lastName = data['lastName'] ?? '';
-        _username = data['username'] ?? '';
-        _photoUrl = data['photoUrl'];
-        _isLoading = false;
-      });
-    }
+    setState(() {
+      _firstName = data?['firstName'] ?? '';
+      _lastName = data?['lastName'] ?? '';
+      _username = data?['username'] ?? '';
+      _photoUrl = data?['photoUrl'];
+      _isLoading = false;
+    });
   }
 
   Future<void> _pickImage() async {
-    final picked = await _picker.pickImage(source: ImageSource.gallery);
+    final picked = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
     if (picked != null) {
       setState(() => _newImage = File(picked.path));
     }
@@ -59,9 +58,12 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   Future<String?> _uploadImage(File file) async {
     try {
       final uid = FirebaseAuth.instance.currentUser!.uid;
-      final ref = FirebaseStorage.instance.ref().child('profile_images').child('$uid.jpg');
-      await ref.putFile(file);
-      return await ref.getDownloadURL();
+      final ref = FirebaseStorage.instance
+          .ref()
+          .child('profile_images')
+          .child('$uid-${DateTime.now().millisecondsSinceEpoch}.jpg');
+      final uploadTask = await ref.putFile(file);
+      return await uploadTask.ref.getDownloadURL();
     } catch (e) {
       print('Image upload failed: $e');
       return null;
@@ -69,13 +71,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _saveProfile() async {
-    print("Save tapped");
-    if (!_formKey.currentState!.validate()) {
-      print("Form invalid");
-      return;
-    }
-    print("Form is valid");
+    if (!_formKey.currentState!.validate()) return;
     _formKey.currentState!.save();
+
+    setState(() {
+      _isLoading = true;
+      _error = null;
+    });
 
     final uid = FirebaseAuth.instance.currentUser!.uid;
     String? imageUrl = _photoUrl;
@@ -84,22 +86,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (_newImage != null) {
         imageUrl = await _uploadImage(_newImage!);
       }
-
       await FirebaseFirestore.instance.collection('users').doc(uid).update({
-        'firstName': _firstName,
-        'lastName': _lastName,
-        'username': _username,
+        'firstName': _firstName!.trim(),
+        'lastName': _lastName!.trim(),
+        'username': _username!.trim(),
         'photoUrl': imageUrl,
       });
 
       if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Profile updated!")),
+      );
       Navigator.pop(context);
     } catch (e) {
+      setState(() => _error = "Failed to save profile");
       print("Error saving profile: $e");
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Failed to save profile")),
-      );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -126,10 +129,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             radius: 50,
                             backgroundImage: _newImage != null
                                 ? FileImage(_newImage!)
-                                : _photoUrl != null
+                                : (_photoUrl != null && _photoUrl!.isNotEmpty)
                                     ? NetworkImage(_photoUrl!) as ImageProvider
                                     : null,
                             backgroundColor: Colors.grey[800],
+                            child: (_newImage == null && (_photoUrl == null || _photoUrl!.isEmpty))
+                                ? const Icon(Icons.person, color: Colors.white, size: 50)
+                                : null,
                           ),
                           Positioned(
                             bottom: 0,
@@ -143,38 +149,55 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       ),
                     ),
                     const SizedBox(height: 24),
+                    if (_error != null) ...[
+                      Text(_error!, style: const TextStyle(color: Colors.red)),
+                      const SizedBox(height: 8),
+                    ],
                     TextFormField(
-                      initialValue: _firstName,
+                      initialValue: _firstName ?? "",
                       style: const TextStyle(color: Colors.white),
-                      decoration: const InputDecoration(labelText: 'First Name', labelStyle: TextStyle(color: Colors.grey)),
+                      decoration: _inputDecoration('First Name'),
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty ? 'Required' : null,
                       onSaved: (value) => _firstName = value,
-                      validator: (value) => value == null || value.isEmpty ? 'Required' : null,
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
-                      initialValue: _lastName,
+                      initialValue: _lastName ?? "",
                       style: const TextStyle(color: Colors.white),
-                      decoration: const InputDecoration(labelText: 'Last Name', labelStyle: TextStyle(color: Colors.grey)),
+                      decoration: _inputDecoration('Last Name'),
                       onSaved: (value) => _lastName = value,
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
-                      initialValue: _username,
+                      initialValue: _username ?? "",
                       style: const TextStyle(color: Colors.white),
-                      decoration: const InputDecoration(labelText: 'Username', labelStyle: TextStyle(color: Colors.grey)),
+                      decoration: _inputDecoration('Username'),
+                      validator: (value) =>
+                          value == null || value.trim().isEmpty ? 'Required' : null,
                       onSaved: (value) => _username = value,
-                      validator: (value) => value == null || value.isEmpty ? 'Required' : null,
                     ),
                     const SizedBox(height: 24),
                     ElevatedButton(
                       onPressed: _saveProfile,
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
                       child: const Text("Save"),
-                    )
+                    ),
                   ],
                 ),
               ),
             ),
     );
   }
+
+  InputDecoration _inputDecoration(String label) => InputDecoration(
+        labelText: label,
+        labelStyle: const TextStyle(color: Colors.grey),
+        filled: true,
+        fillColor: Colors.grey[850],
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
+      );
 }
