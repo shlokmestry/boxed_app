@@ -24,7 +24,6 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
   final List<File> _selectedImages = [];
   final ImagePicker _picker = ImagePicker();
 
-  // List of selected collaborators (each is a map with uid, username_lowercase)
   final List<Map<String, dynamic>> _collaborators = [];
 
   Future<void> _selectDateTime() async {
@@ -35,8 +34,9 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
       firstDate: now,
       lastDate: DateTime(now.year + 5),
       builder: (context, child) {
+        // Use app theme for date picker
         return Theme(
-          data: ThemeData.dark(),
+          data: Theme.of(context),
           child: child!,
         );
       },
@@ -48,7 +48,7 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
         initialTime: const TimeOfDay(hour: 12, minute: 0),
         builder: (context, child) {
           return Theme(
-            data: ThemeData.dark(),
+            data: Theme.of(context),
             child: child!,
           );
         },
@@ -172,7 +172,7 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     }
   }
 
-  Widget _buildCollaboratorSearch() {
+  Widget _buildCollaboratorSearch(ColorScheme colorScheme, TextTheme textTheme) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -182,7 +182,6 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
             if (pattern.isEmpty) return [];
             final lowerPattern = pattern.toLowerCase();
 
-            // Only search by username_lowercase
             final snap = await FirebaseFirestore.instance
                 .collection('users')
                 .where('username_lowercase', isGreaterThanOrEqualTo: lowerPattern)
@@ -206,23 +205,23 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
             return TextField(
               controller: controller,
               focusNode: focusNode,
-              style: const TextStyle(color: Colors.white),
+              style: textTheme.bodyLarge?.copyWith(color: colorScheme.onSurface),
               decoration: InputDecoration(
                 hintText: 'Search username',
-                hintStyle: const TextStyle(color: Colors.grey),
+                hintStyle: textTheme.bodyLarge?.copyWith(color: colorScheme.onSurface.withOpacity(0.5)),
                 filled: true,
-                fillColor: Colors.grey[850],
+                fillColor: colorScheme.surface,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(8),
                   borderSide: BorderSide.none,
                 ),
-                prefixIcon: const Icon(Icons.search, color: Colors.white54),
+                prefixIcon: Icon(Icons.search, color: colorScheme.primary),
               ),
             );
           },
           itemBuilder: (context, suggestion) {
             return ListTile(
-              title: Text(suggestion['username_lowercase']),
+              title: Text(suggestion['username_lowercase'], style: textTheme.bodyMedium),
             );
           },
           onSelected: (suggestion) {
@@ -231,9 +230,9 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
               _collaboratorSearchController.clear();
             });
           },
-          emptyBuilder: (context) => const Padding(
-            padding: EdgeInsets.all(8.0),
-            child: Text('No user found', style: TextStyle(color: Colors.white70)),
+          emptyBuilder: (context) => Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Text('No user found', style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurface.withOpacity(0.6))),
           ),
         ),
         const SizedBox(height: 8),
@@ -252,13 +251,23 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: colorScheme.background,
       appBar: AppBar(
-        title: const Text("Create Capsule"),
+        title: Text(
+          "Create Capsule",
+          style: textTheme.titleLarge?.copyWith(
+            color: colorScheme.primary,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         centerTitle: true,
-        backgroundColor: Colors.black,
+        backgroundColor: colorScheme.background,
         elevation: 0,
+        iconTheme: IconThemeData(color: colorScheme.primary),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -267,20 +276,20 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
           children: [
             Text(
               "Capsule Name",
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
+              style: textTheme.bodyLarge?.copyWith(
+                color: colorScheme.onBackground,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const SizedBox(height: 8),
             TextField(
               controller: _nameController,
-              style: const TextStyle(color: Colors.white),
+              style: textTheme.bodyLarge?.copyWith(color: colorScheme.onSurface),
               decoration: InputDecoration(
                 hintText: 'Enter a title',
-                hintStyle: const TextStyle(color: Colors.grey),
+                hintStyle: textTheme.bodyLarge?.copyWith(color: colorScheme.onSurface.withOpacity(0.5)),
                 filled: true,
-                fillColor: Colors.grey[850],
+                fillColor: colorScheme.surface,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -290,21 +299,21 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
             const SizedBox(height: 24),
             Text(
               "Description",
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
+              style: textTheme.bodyLarge?.copyWith(
+                color: colorScheme.onBackground,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const SizedBox(height: 8),
             TextField(
               controller: _descriptionController,
               maxLines: 4,
-              style: const TextStyle(color: Colors.white),
+              style: textTheme.bodyLarge?.copyWith(color: colorScheme.onSurface),
               decoration: InputDecoration(
                 hintText: 'What is this capsule about?',
-                hintStyle: const TextStyle(color: Colors.grey),
+                hintStyle: textTheme.bodyLarge?.copyWith(color: colorScheme.onSurface.withOpacity(0.5)),
                 filled: true,
-                fillColor: Colors.grey[850],
+                fillColor: colorScheme.surface,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -314,10 +323,10 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
             const SizedBox(height: 24),
             Text(
               "Unlock Date & Time",
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
+              style: textTheme.bodyLarge?.copyWith(
+                color: colorScheme.onBackground,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const SizedBox(height: 8),
             GestureDetector(
@@ -326,14 +335,16 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
                 decoration: BoxDecoration(
-                  color: Colors.grey[850],
+                  color: colorScheme.surface,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
                   _selectedDateTime == null
                       ? 'Select a future date & time'
                       : 'Opens on: ${_selectedDateTime!.toLocal().toString().replaceFirst(".000", "")}',
-                  style: const TextStyle(color: Colors.white70),
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurface.withOpacity(0.7),
+                  ),
                 ),
               ),
             ),
@@ -346,10 +357,10 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
                     children: [
                       Text(
                         "Upload Photos",
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                            ),
+                        style: textTheme.bodyLarge?.copyWith(
+                          color: colorScheme.onBackground,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Wrap(
@@ -375,10 +386,10 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
                                     onTap: () => _removeImage(file),
                                     child: Container(
                                       decoration: BoxDecoration(
-                                        color: Colors.black54,
+                                        color: colorScheme.background.withOpacity(0.8),
                                         shape: BoxShape.circle,
                                       ),
-                                      child: const Icon(Icons.close, size: 16, color: Colors.white),
+                                      child: Icon(Icons.close, size: 16, color: colorScheme.onBackground),
                                     ),
                                   ),
                                 ),
@@ -391,11 +402,11 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
                               width: 80,
                               height: 80,
                               decoration: BoxDecoration(
-                                color: Colors.grey[850],
+                                color: colorScheme.surface,
                                 borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: Colors.grey.shade700),
+                                border: Border.all(color: colorScheme.primary.withOpacity(0.2)),
                               ),
-                              child: const Icon(Icons.add_a_photo, color: Colors.white54),
+                              child: Icon(Icons.add_a_photo, color: colorScheme.primary),
                             ),
                           ),
                         ],
@@ -410,13 +421,13 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
                     children: [
                       Text(
                         "Add Collaborators",
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w600,
-                            ),
+                        style: textTheme.bodyLarge?.copyWith(
+                          color: colorScheme.onBackground,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                       const SizedBox(height: 8),
-                      _buildCollaboratorSearch(),
+                      _buildCollaboratorSearch(colorScheme, textTheme),
                     ],
                   ),
                 ),
@@ -425,21 +436,21 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
             const SizedBox(height: 24),
             Text(
               "Write a Note",
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w600,
-                  ),
+              style: textTheme.bodyLarge?.copyWith(
+                color: colorScheme.onBackground,
+                fontWeight: FontWeight.w600,
+              ),
             ),
             const SizedBox(height: 8),
             TextField(
               controller: _noteController,
               maxLines: 5,
-              style: const TextStyle(color: Colors.white),
+              style: textTheme.bodyLarge?.copyWith(color: colorScheme.onSurface),
               decoration: InputDecoration(
                 hintText: 'Share a memory, story, or message...',
-                hintStyle: const TextStyle(color: Colors.grey),
+                hintStyle: textTheme.bodyLarge?.copyWith(color: colorScheme.onSurface.withOpacity(0.5)),
                 filled: true,
-                fillColor: Colors.grey[850],
+                fillColor: colorScheme.surface,
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
@@ -454,15 +465,19 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
                     child: ElevatedButton(
                       onPressed: _createCapsule,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueAccent,
+                        backgroundColor: colorScheme.primary,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      child: const Text(
+                      child: Text(
                         'Create Capsule',
-                        style: TextStyle(fontSize: 16),
+                        style: textTheme.bodyLarge?.copyWith(
+                          color: colorScheme.onPrimary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 16,
+                        ),
                       ),
                     ),
                   ),

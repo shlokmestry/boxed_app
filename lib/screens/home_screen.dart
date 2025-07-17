@@ -7,7 +7,6 @@ import 'package:boxed_app/screens/profile_screen.dart';
 import 'package:intl/intl.dart';
 import 'package:boxed_app/screens/settings_screen.dart';
 
-
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -19,33 +18,36 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('My Capsules'),
-        backgroundColor: Colors.black,
-        centerTitle: true,
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: () => Scaffold.of(context).openDrawer(),
+        title: Text(
+          'My Capsules',
+          style: textTheme.titleLarge?.copyWith(
+            color: colorScheme.primary,
+            fontWeight: FontWeight.bold,
           ),
         ),
+        backgroundColor: colorScheme.background,
+        centerTitle: true,
+        iconTheme: IconThemeData(color: colorScheme.primary),
+        elevation: 0,
       ),
       drawer: Drawer(
-        backgroundColor: Colors.black,
+        backgroundColor: colorScheme.background,
         child: SafeArea(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Padding(
-                padding: EdgeInsets.all(20),
+              Padding(
+                padding: const EdgeInsets.all(20),
                 child: Text(
                   'Boxed',
-                  style: TextStyle(
-                    fontSize: 28,
+                  style: textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    color: colorScheme.primary,
                     letterSpacing: 1.2,
                   ),
                 ),
@@ -73,7 +75,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 onTap: () {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Invites coming soon")),
+                    SnackBar(
+                      content: const Text("Invites coming soon"),
+                      backgroundColor: colorScheme.surface,
+                      behavior: SnackBarBehavior.floating,
+                    ),
                   );
                 },
               ),
@@ -83,7 +89,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 onTap: () {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Shared Capsules coming soon")),
+                    SnackBar(
+                      content: const Text("Shared Capsules coming soon"),
+                      backgroundColor: colorScheme.surface,
+                      behavior: SnackBarBehavior.floating,
+                    ),
                   );
                 },
               ),
@@ -93,19 +103,23 @@ class _HomeScreenState extends State<HomeScreen> {
                 onTap: () {
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Themes feature coming soon")),
+                    SnackBar(
+                      content: const Text("Themes feature coming soon"),
+                      backgroundColor: colorScheme.surface,
+                      behavior: SnackBarBehavior.floating,
+                    ),
                   );
                 },
               ),
               _DrawerButton(
                 icon: Icons.settings,
                 label: 'Settings',
-                 onTap: () {
-    Navigator.pop(context);
-    Navigator.push(
-      context,
-      MaterialPageRoute(builder: (_) => const SettingsScreen()),
-    );
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                  );
                 },
               ),
               const Spacer(),
@@ -124,7 +138,7 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ),
       ),
-      backgroundColor: Colors.black,
+      backgroundColor: colorScheme.background,
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           Navigator.push(
@@ -132,12 +146,18 @@ class _HomeScreenState extends State<HomeScreen> {
             MaterialPageRoute(builder: (_) => const CreateCapsuleScreen()),
           );
         },
-        backgroundColor: Colors.blue,
-        child: const Icon(Icons.add, color: Colors.white),
+        backgroundColor: colorScheme.primary,
+        child: Icon(Icons.add, color: colorScheme.onPrimary),
       ),
       body: user == null
-          ? const Center(
-              child: Text("Please sign in to view capsules", style: TextStyle(color: Colors.white)))
+          ? Center(
+              child: Text(
+                "Please sign in to view capsules",
+                style: textTheme.bodyLarge?.copyWith(
+                  color: colorScheme.onBackground,
+                ),
+              ),
+            )
           : StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('capsules')
@@ -151,7 +171,14 @@ class _HomeScreenState extends State<HomeScreen> {
                 final docs = snapshot.data!.docs;
 
                 if (docs.isEmpty) {
-                  return const Center(child: Text("No capsules found.", style: TextStyle(color: Colors.white)));
+                  return Center(
+                    child: Text(
+                      "No capsules found.",
+                      style: textTheme.bodyLarge?.copyWith(
+                        color: colorScheme.onBackground,
+                      ),
+                    ),
+                  );
                 }
 
                 return ListView.builder(
@@ -175,7 +202,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           MaterialPageRoute(
                             builder: (_) => CapsuleDetailScreen(
                               capsuleId: docs[index].id,
-                              // Remove isUnlocked; CapsuleDetailScreen should check unlock logic itself
                             ),
                           ),
                         );
@@ -207,6 +233,9 @@ class CapsuleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     final unlockLabel = isUnlocked
         ? 'Unlocked on ${DateFormat.yMMMd().format(unlockDate)}'
         : 'Unlocks in ${_formatCountdown(unlockDate)}';
@@ -214,7 +243,7 @@ class CapsuleCard extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Card(
-        color: Colors.grey[900],
+        color: colorScheme.surface,
         margin: const EdgeInsets.only(bottom: 16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         child: Padding(
@@ -228,26 +257,26 @@ class CapsuleCard extends StatelessWidget {
                   children: [
                     Text(
                       '$emoji $title',
-                      style: const TextStyle(
-                        fontSize: 17,
+                      style: textTheme.bodyLarge?.copyWith(
                         fontWeight: FontWeight.w600,
-                        color: Colors.white,
+                        color: colorScheme.onSurface,
+                        fontSize: 17,
                       ),
                     ),
                     const SizedBox(height: 6),
                     Text(
                       unlockLabel,
-                      style: const TextStyle(
+                      style: textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurface.withOpacity(0.6),
                         fontSize: 13,
-                        color: Colors.white60,
                       ),
                     ),
                   ],
                 ),
               ),
               isUnlocked
-                  ? const Icon(Icons.lock_open_rounded, color: Colors.greenAccent)
-                  : const Icon(Icons.lock_outline, color: Colors.white60),
+                  ? Icon(Icons.lock_open_rounded, color: Colors.greenAccent)
+                  : Icon(Icons.lock_outline, color: colorScheme.onSurface.withOpacity(0.6)),
             ],
           ),
         ),
@@ -275,38 +304,42 @@ class _DrawerButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  final Color iconColor;
-  final Color textColor;
+  final Color? iconColor;
+  final Color? textColor;
 
   const _DrawerButton({
     required this.icon,
     required this.label,
     required this.onTap,
-    this.iconColor = Colors.white,
-    this.textColor = Colors.white,
+    this.iconColor,
+    this.textColor,
     Key? key,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final baseIconColor = iconColor ?? colorScheme.onSurface;
+    final baseTextColor = textColor ?? colorScheme.onSurface;
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: GestureDetector(
         onTap: onTap,
         child: Container(
           decoration: BoxDecoration(
-            color: Colors.grey[900],
+            color: colorScheme.surface,
             borderRadius: BorderRadius.circular(12),
           ),
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
           child: Row(
             children: [
-              Icon(icon, color: iconColor),
+              Icon(icon, color: baseIconColor),
               const SizedBox(width: 16),
               Text(
                 label,
                 style: TextStyle(
-                  color: textColor,
+                  color: baseTextColor,
                   fontSize: 16,
                   fontWeight: FontWeight.w500,
                 ),

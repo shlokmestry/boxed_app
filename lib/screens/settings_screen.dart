@@ -1,3 +1,4 @@
+import 'package:boxed_app/widgets/theme_picker_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:boxed_app/screens/edit_profile_screen.dart';
 import 'package:boxed_app/screens/delete_account_screen.dart';
@@ -7,22 +8,30 @@ class SettingsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: colorScheme.background,
       appBar: AppBar(
-        title: const Text('Settings'),
-        backgroundColor: Colors.black,
+        title: Text(
+          'Settings',
+          style: textTheme.titleLarge?.copyWith(color: colorScheme.onBackground),
+        ),
+        backgroundColor: colorScheme.background,
+        iconTheme: IconThemeData(color: colorScheme.primary),
+        elevation: 0,
       ),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          const Text("Account", style: _sectionStyle),
+          Text("Account", style: _sectionStyle(context)),
           _buildOption(
             context,
             "Edit Profile",
             onTap: () {
               Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const EditProfileScreen()));
+                MaterialPageRoute(builder: (_) => const EditProfileScreen()));
             },
           ),
           _buildOption(
@@ -30,47 +39,58 @@ class SettingsScreen extends StatelessWidget {
             "Delete Account",
             onTap: () {
               Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const DeleteAccountScreen()));
+                MaterialPageRoute(builder: (_) => const DeleteAccountScreen()));
             },
           ),
 
           const SizedBox(height: 30),
-          const Text("Appearance", style: _sectionStyle),
+          Text("Appearance", style: _sectionStyle(context)),
           _buildOption(
             context,
             "App Theme",
             onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Theme toggle coming soon")),
+              showModalBottomSheet(
+                context: context,
+                builder: (_) => const ThemePickerSheet(),
+                backgroundColor: colorScheme.background,
               );
             },
           ),
 
           const SizedBox(height: 30),
-          const Text("Privacy & Security", style: _sectionStyle),
+          Text("Privacy & Security", style: _sectionStyle(context)),
           _buildOption(
             context,
             "Permissions",
             onTap: () {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Permission settings coming soon")),
+                SnackBar(
+                  content: Text(
+                    "Permission settings coming soon",
+                    style: TextStyle(color: colorScheme.onBackground),
+                  ),
+                  backgroundColor: colorScheme.background,
+                  behavior: SnackBarBehavior.floating,
+                ),
               );
             },
           ),
 
           const SizedBox(height: 30),
-          const Text("Support", style: _sectionStyle),
+          Text("Support", style: _sectionStyle(context)),
           _buildOption(context, "FAQ", onTap: () {}),
           _buildOption(context, "Contact Support", onTap: () {}),
           _buildOption(context, "Report a Bug", onTap: () {}),
 
           const SizedBox(height: 30),
-          const Text("About", style: _sectionStyle),
+          Text("About", style: _sectionStyle(context)),
           _buildOption(context, "Privacy Policy", onTap: () {}),
           const SizedBox(height: 16),
           Text(
             "Boxed v1.0.0",
-            style: TextStyle(color: Colors.white60, fontSize: 13),
+            style: textTheme.bodySmall?.copyWith(
+              color: colorScheme.onBackground.withOpacity(0.6),
+            ),
           ),
         ],
       ),
@@ -78,16 +98,22 @@ class SettingsScreen extends StatelessWidget {
   }
 
   Widget _buildOption(BuildContext context, String label, {VoidCallback? onTap}) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     return ListTile(
-      title: Text(label, style: const TextStyle(color: Colors.white)),
-      trailing: const Icon(Icons.chevron_right, color: Colors.white),
+      title: Text(
+        label,
+        style: textTheme.bodyLarge?.copyWith(color: colorScheme.onBackground),
+      ),
+      trailing: Icon(Icons.chevron_right, color: colorScheme.onBackground),
       onTap: onTap,
     );
   }
 }
 
-const _sectionStyle = TextStyle(
-  color: Colors.white70,
-  fontSize: 14,
-  fontWeight: FontWeight.bold,
-);
+TextStyle _sectionStyle(BuildContext context) =>
+    Theme.of(context).textTheme.bodySmall!.copyWith(
+          color: Theme.of(context).colorScheme.onBackground.withOpacity(0.7),
+          fontWeight: FontWeight.bold,
+          fontSize: 14,
+        );

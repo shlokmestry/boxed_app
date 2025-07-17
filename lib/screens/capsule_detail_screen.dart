@@ -8,7 +8,7 @@ class CapsuleDetailScreen extends StatefulWidget {
 
   const CapsuleDetailScreen({
     required this.capsuleId,
-    Key? key, required ,
+    Key? key,
   }) : super(key: key);
 
   @override
@@ -77,7 +77,6 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
         }
       });
 
-      // Show content animation if unlocked
       if (unlocked) {
         Future.delayed(const Duration(milliseconds: 300), () {
           if (mounted) {
@@ -106,62 +105,76 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     if (_loading) {
-      return const Scaffold(
-        backgroundColor: Colors.black,
-        body: Center(child: CircularProgressIndicator()),
+      return Scaffold(
+        backgroundColor: colorScheme.background,
+        body: Center(child: CircularProgressIndicator(color: colorScheme.primary)),
       );
     }
-    return _isUnlocked ? _buildUnlockedView() : _buildLockedView();
+    return _isUnlocked ? _buildUnlockedView(colorScheme) : _buildLockedView(colorScheme);
   }
 
-  Widget _buildLockedView() {
+  Widget _buildLockedView(ColorScheme colorScheme) {
+    final textTheme = Theme.of(context).textTheme;
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: colorScheme.background,
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Icon(Icons.lock, size: 64, color: Colors.white),
+              Icon(Icons.lock, size: 64, color: colorScheme.primary),
               const SizedBox(height: 20),
               Text(
                 "You're a bit early!",
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
+                style: textTheme.headlineSmall?.copyWith(
+                  color: colorScheme.onBackground,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 10),
               if (_capsuleTitle != null)
                 Text(
                   _capsuleTitle!,
-                  style: const TextStyle(fontSize: 18, color: Colors.white70),
+                  style: textTheme.bodyLarge?.copyWith(
+                    color: colorScheme.onBackground.withOpacity(0.7),
+                  ),
                 ),
               const SizedBox(height: 10),
               if (_unlockDate != null)
                 Text(
                   'Unlocks on: ${DateFormat.yMMMd().add_jm().format(_unlockDate!)}',
-                  style: const TextStyle(color: Colors.white70),
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onBackground.withOpacity(0.5),
+                  ),
                 ),
               const SizedBox(height: 20),
               if (_unlockDate != null)
                 Text(
                   '⏳ ${_formatDuration(_remaining)}',
-                  style: const TextStyle(color: Colors.blueAccent, fontSize: 18),
+                  style: textTheme.titleMedium?.copyWith(
+                    color: colorScheme.primary,
+                  ),
                 ),
               const SizedBox(height: 40),
               ElevatedButton(
                 onPressed: () => Navigator.pop(context),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.blueAccent,
+                  backgroundColor: colorScheme.primary,
                   padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text("Back", style: TextStyle(fontSize: 16)),
+                child: Text(
+                  "Back",
+                  style: textTheme.bodyLarge?.copyWith(
+                    color: colorScheme.onPrimary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ],
           ),
@@ -170,13 +183,22 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
     );
   }
 
-  Widget _buildUnlockedView() {
+  Widget _buildUnlockedView(ColorScheme colorScheme) {
+    final textTheme = Theme.of(context).textTheme;
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: colorScheme.background,
       appBar: AppBar(
-        title: Text(_capsuleTitle ?? 'Capsule'),
+        title: Text(
+          _capsuleTitle ?? 'Capsule',
+          style: textTheme.titleLarge?.copyWith(
+            color: colorScheme.primary,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         centerTitle: true,
-        backgroundColor: Colors.black,
+        backgroundColor: colorScheme.background,
+        elevation: 0,
+        iconTheme: IconThemeData(color: colorScheme.primary),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
@@ -188,9 +210,9 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
               opacity: _showContent ? 1 : 0,
               child: Center(
                 child: Column(
-                  children: const [
-                    Icon(Icons.inventory_2, size: 64, color: Colors.white),
-                    SizedBox(height: 12),
+                  children: [
+                    Icon(Icons.inventory_2, size: 64, color: colorScheme.primary),
+                    const SizedBox(height: 12),
                   ],
                 ),
               ),
@@ -208,17 +230,19 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
                     if (_capsuleTitle != null)
                       Text(
                         _capsuleTitle!,
-                        style: const TextStyle(
-                          fontSize: 28,
+                        style: textTheme.headlineMedium?.copyWith(
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
+                          color: colorScheme.onBackground,
                         ),
                       ),
                     const SizedBox(height: 12),
                     if (_capsuleDescription != null)
                       Text(
                         _capsuleDescription!,
-                        style: const TextStyle(color: Colors.grey, fontSize: 16),
+                        style: textTheme.bodyLarge?.copyWith(
+                          color: colorScheme.onBackground.withOpacity(0.7),
+                          fontSize: 16,
+                        ),
                       ),
                     const SizedBox(height: 20),
                     StreamBuilder<QuerySnapshot>(
@@ -230,13 +254,17 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
                           .snapshots(),
                       builder: (context, snapshot) {
                         if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
+                          return Center(child: CircularProgressIndicator(color: colorScheme.primary));
                         }
 
                         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                          return const Center(
-                            child: Text("No memories yet.",
-                                style: TextStyle(color: Colors.white70)),
+                          return Center(
+                            child: Text(
+                              "No memories yet.",
+                              style: textTheme.bodyLarge?.copyWith(
+                                color: colorScheme.onBackground.withOpacity(0.65),
+                              ),
+                            ),
                           );
                         }
 
@@ -248,7 +276,7 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
                             final type = memory['type'];
 
                             if (type == 'note') {
-                              return _buildNoteMemory(memory);
+                              return _buildNoteMemory(memory, colorScheme, textTheme);
                             } else if (type == 'image') {
                               return _buildImageMemory(memory);
                             } else {
@@ -262,7 +290,10 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
                     if (_unlockDate != null)
                       Text(
                         'Unlocked on: ${DateFormat.yMMMd().add_jm().format(_unlockDate!)}',
-                        style: const TextStyle(color: Colors.white60, fontSize: 14),
+                        style: textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onBackground.withOpacity(0.6),
+                          fontSize: 14,
+                        ),
                       ),
                   ],
                 ),
@@ -274,18 +305,21 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
     );
   }
 
-  Widget _buildNoteMemory(Map<String, dynamic> memory) {
+  Widget _buildNoteMemory(Map<String, dynamic> memory, ColorScheme colorScheme, TextTheme textTheme) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 16),
       child: Card(
-        color: Colors.grey[900],
+        color: colorScheme.surface,
         elevation: 2,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Text(
             memory['text'] ?? '',
-            style: const TextStyle(fontSize: 16, color: Colors.white),
+            style: textTheme.bodyLarge?.copyWith(
+              fontSize: 16,
+              color: colorScheme.onSurface,
+            ),
           ),
         ),
       ),
