@@ -150,12 +150,10 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Icon(Icons.add, color: colorScheme.onPrimary),
       ),
       body: user == null
-          ? Center(
+          ? const Center(
               child: Text(
                 "Please sign in to view capsules",
-                style: textTheme.bodyLarge?.copyWith(
-                  color: colorScheme.onBackground,
-                ),
+                style: TextStyle(color: Colors.white),
               ),
             )
           : StreamBuilder<QuerySnapshot>(
@@ -171,12 +169,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 final docs = snapshot.data!.docs;
 
                 if (docs.isEmpty) {
-                  return Center(
+                  return const Center(
                     child: Text(
                       "No capsules found.",
-                      style: textTheme.bodyLarge?.copyWith(
-                        color: colorScheme.onBackground,
-                      ),
+                      style: TextStyle(color: Colors.white),
                     ),
                   );
                 }

@@ -153,8 +153,8 @@ Future<void> _signInWithApple() async {
     return Scaffold(
       backgroundColor: Colors.black,
       body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -298,11 +298,19 @@ Future<void> _signInWithApple() async {
 
                       if (user != null) {
                         final now = Timestamp.now();
-
-                        // ✅ Generate RSA keypair for the user (only on signup)
-                        await EncryptionService.generateAndStoreKeyPair(user.uid);
-
-                        // ✅ Save user data in Firestore
+                        final username = user.email!.split('@')[0];
+                        String displayName = '';
+                        String firstName = '';
+                        String lastName = '';
+                        if (username.contains('.')) {
+                          final parts = username.split('.');
+                          firstName = parts[0];
+                          lastName = parts.length > 1 ? parts[1] : '';
+                          displayName = '${_capitalize(firstName)} ${_capitalize(lastName)}';
+                        } else {
+                          firstName = username;
+                          displayName = _capitalize(username);
+                        }
                         await FirebaseFirestore.instance
                             .collection('users')
                             .doc(user.uid)

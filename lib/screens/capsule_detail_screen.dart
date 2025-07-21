@@ -130,59 +130,57 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
       backgroundColor: colorScheme.background,
       body: Center(
         child: Padding(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(Icons.lock, size: 64, color: colorScheme.primary),
-              const SizedBox(height: 20),
+              const Icon(Icons.lock, size: 64, color: Colors.white),
+              const SizedBox(height: 24),
               Text(
                 "You're a bit early!",
-                style: textTheme.headlineSmall?.copyWith(
-                  color: colorScheme.onBackground,
-                  fontWeight: FontWeight.bold,
-                ),
+                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                textAlign: TextAlign.center,
               ),
               const SizedBox(height: 10),
               if (_capsuleTitle != null)
                 Text(
                   _capsuleTitle!,
-                  style: textTheme.bodyLarge?.copyWith(
-                    color: colorScheme.onBackground.withOpacity(0.7),
-                  ),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: Colors.white70,
+                      ),
+                  textAlign: TextAlign.center,
                 ),
               const SizedBox(height: 10),
               if (_unlockDate != null)
                 Text(
                   'Unlocks on: ${DateFormat.yMMMd().add_jm().format(_unlockDate!)}',
-                  style: textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onBackground.withOpacity(0.5),
-                  ),
+                  style: const TextStyle(color: Colors.white70),
+                  textAlign: TextAlign.center,
                 ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 18),
               if (_unlockDate != null)
                 Text(
                   '⏳ ${_formatDuration(_remaining)}',
-                  style: textTheme.titleMedium?.copyWith(
-                    color: colorScheme.primary,
-                  ),
+                  style: const TextStyle(color: Colors.blueAccent, fontSize: 18),
+                  textAlign: TextAlign.center,
                 ),
-              const SizedBox(height: 40),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: colorScheme.primary,
-                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
+              const SizedBox(height: 36),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(context),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blueAccent,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                   ),
-                ),
-                child: Text(
-                  "Back",
-                  style: textTheme.bodyLarge?.copyWith(
-                    color: colorScheme.onPrimary,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  child: const Text("Back", style: TextStyle(fontSize: 16)),
                 ),
               ),
             ],
@@ -210,84 +208,62 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
         backgroundColor: Colors.transparent,
         elevation: 0,
         centerTitle: true,
+        backgroundColor: Colors.black,
       ),
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          // Only show image if user selected one
-          if (backgroundAsset != null)
-            Image.asset(
-              backgroundAsset,
-              fit: BoxFit.cover,
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            AnimatedOpacity(
+              duration: const Duration(milliseconds: 800),
+              opacity: _showContent ? 1 : 0,
+              child: Center(
+                child: Column(
+                  children: const [
+                    Icon(Icons.inventory_2, size: 64, color: Colors.white),
+                    SizedBox(height: 12),
+                  ],
+                ),
+              ),
             ),
-
-          // Only show overlay if background image exists
-          if (backgroundAsset != null)
-            Container(
-              color: Colors.black.withOpacity(0.4),
-            ),
-
-          SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  AnimatedOpacity(
-                    duration: const Duration(milliseconds: 800),
-                    opacity: _showContent ? 1 : 0,
-                    child: const Center(
-                      child: Icon(Icons.inventory_2, size: 64, color: Colors.white),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  AnimatedOpacity(
-                    duration: const Duration(milliseconds: 800),
-                    opacity: _showContent ? 1 : 0,
-                    child: AnimatedScale(
-                      duration: const Duration(milliseconds: 600),
-                      scale: _showContent ? 1.0 : 0.95,
-                      curve: Curves.easeOutBack,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (_capsuleTitle != null)
-                            Text(
-                              _capsuleTitle!,
-                              style: const TextStyle(
-                                fontSize: 28,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.white,
-                                shadows: [
-                                  Shadow(
-                                    blurRadius: 8,
-                                    color: Colors.black87,
-                                    offset: Offset(0, 2),
-                                  )
-                                ],
-                              ),
-                            ),
-                          const SizedBox(height: 12),
-                          if (_capsuleDescription != null)
-                            Text(
-                              _capsuleDescription!,
-                              style: const TextStyle(
-                                color: Colors.white70,
-                                fontSize: 16,
-                              ),
-                            ),
-                          const SizedBox(height: 20),
-                          StreamBuilder<QuerySnapshot>(
-                            stream: FirebaseFirestore.instance
-                                .collection('capsules')
-                                .doc(widget.capsuleId)
-                                .collection('memories')
-                                .orderBy('timestamp', descending: false)
-                                .snapshots(),
-                            builder: (context, snapshot) {
-                              if (snapshot.connectionState == ConnectionState.waiting) {
-                                return const Center(child: CircularProgressIndicator());
-                              }
+            AnimatedOpacity(
+              duration: const Duration(milliseconds: 800),
+              opacity: _showContent ? 1 : 0,
+              child: AnimatedScale(
+                duration: const Duration(milliseconds: 600),
+                scale: _showContent ? 1.0 : 0.95,
+                curve: Curves.easeOutBack,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (_capsuleTitle != null)
+                      Text(
+                        _capsuleTitle!,
+                        style: const TextStyle(
+                          fontSize: 28,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+                    if (_capsuleDescription != null)
+                      Text(
+                        _capsuleDescription!,
+                        style: const TextStyle(color: Colors.grey, fontSize: 16),
+                      ),
+                    const SizedBox(height: 20),
+                    StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('capsules')
+                          .doc(widget.capsuleId)
+                          .collection('memories')
+                          .orderBy('timestamp', descending: false)
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        if (snapshot.connectionState == ConnectionState.waiting) {
+                          return const Center(child: CircularProgressIndicator());
+                        }
 
                               if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                                 return const Center(

@@ -1,8 +1,7 @@
 import 'package:boxed_app/screens/home_screen.dart';
 import 'package:boxed_app/screens/profile_screen.dart';
 import 'package:boxed_app/screens/splash_screen.dart';
-import 'package:boxed_app/screens/login_signup.dart';
-
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
@@ -10,9 +9,8 @@ import 'firebase_options.dart';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-
-import 'package:provider/provider.dart';
-import 'providers/theme_provider.dart'; // <-- Updated ThemeProvider with full support
+import 'screens/login_signup.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Initialize flutter local notifications
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
@@ -88,44 +86,50 @@ Future<void> main() async {
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
+  Future<bool> _getOnboardingSeen() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getBool('onboarding_seen') ?? false;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Consumer<ThemeProvider>(
-      builder: (context, themeProvider, _) {
-        return MaterialApp(
-          debugShowCheckedModeBanner: false,
-          title: 'Boxed',
-
-          theme: ThemeData.light().copyWith(
-            scaffoldBackgroundColor: Colors.white,
-            colorScheme: const ColorScheme.light(
-              primary: Colors.teal,
-              background: Colors.white,
-            ),
-            appBarTheme: const AppBarTheme(
-              backgroundColor: Colors.white,
-              iconTheme: IconThemeData(color: Colors.teal),
-              titleTextStyle: TextStyle(color: Colors.teal, fontSize: 20),
-            ),
-          ),
-
-          darkTheme: ThemeData.dark().copyWith(
-            scaffoldBackgroundColor: Colors.black,
-            colorScheme: const ColorScheme.dark(
-              primary: Colors.teal,
-              background: Colors.black,
-            ),
-            appBarTheme: const AppBarTheme(
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData.dark(),
+      title: 'Boxed',
+      home: FutureBuilder<bool>(
+        future: _getOnboardingSeen(),
+        builder: (context, onboardingSnapshot) {
+          if (!onboardingSnapshot.hasData) {
+            return const Scaffold(
               backgroundColor: Colors.black,
-              iconTheme: IconThemeData(color: Colors.teal),
-              titleTextStyle: TextStyle(color: Colors.teal, fontSize: 20),
-            ),
-          ),
-
-          themeMode: themeProvider.themeMode, // Realtime theme switching
-          home: const SplashScreen(), // Initial screen
-        );
-      },
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
+          final onboardingSeen = onboardingSnapshot.data!;
+          if (!onboardingSeen) {
+            return const SplashScreen();
+          }
+          // Onboarding seen, now listen to auth state
+          return StreamBuilder<User?>(
+            stream: FirebaseAuth.instance.authStateChanges(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Scaffold(
+                  backgroundColor: Colors.black,
+                  body: Center(child: CircularProgressIndicator()),
+                );
+              }
+              final user = snapshot.data;
+              if (user != null) {
+                return const HomeScreen();
+              } else {
+                return const LoginSignup();
+              }
+            },
+          );
+        },
+      ),
     );
   }
 }
