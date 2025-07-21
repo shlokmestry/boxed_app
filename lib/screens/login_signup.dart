@@ -1,4 +1,5 @@
 import 'package:boxed_app/widgets/buttons.dart';
+import 'package:boxed_app/services/encryption_service.dart';
 import 'package:flutter/material.dart';
 import 'home_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -242,8 +243,10 @@ Future<void> _signInWithApple() async {
 
                   if (email.isEmpty || password.isEmpty) {
                     _showFieldErrors(
-                      emailMsg: email.isEmpty ? 'Please enter your email.' : null,
-                      passwordMsg: password.isEmpty ? 'Please enter your password.' : null,
+                      emailMsg:
+                          email.isEmpty ? 'Please enter your email.' : null,
+                      passwordMsg:
+                          password.isEmpty ? 'Please enter your password.' : null,
                     );
                     return;
                   }
@@ -292,23 +295,14 @@ Future<void> _signInWithApple() async {
                       );
 
                       final user = credential.user;
+
                       if (user != null) {
                         final now = Timestamp.now();
-                        final username = user.email!.split('@')[0];
 
-                        String displayName = '';
-                        String firstName = '';
-                        String lastName = '';
-                        if (username.contains('.')) {
-                          final parts = username.split('.');
-                          firstName = parts[0];
-                          lastName = parts.length > 1 ? parts[1] : '';
-                          displayName = '${_capitalize(firstName)} ${_capitalize(lastName)}';
-                        } else {
-                          firstName = username;
-                          displayName = _capitalize(username);
-                        }
+                        // ✅ Generate RSA keypair for the user (only on signup)
+                        await EncryptionService.generateAndStoreKeyPair(user.uid);
 
+                        // ✅ Save user data in Firestore
                         await FirebaseFirestore.instance
                             .collection('users')
                             .doc(user.uid)
@@ -323,39 +317,55 @@ Future<void> _signInWithApple() async {
                           'createdAt': now,
                           'darkMode': false,
                         }, SetOptions(merge: true));
-
-                        // ✅ Redirect to choose username screen
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const ChooseUsernameScreen()),
-                        );
                       }
                     }
+
+                    // ✅ Last login timestamp
+                    final currentUser = FirebaseAuth.instance.currentUser;
+                    if (currentUser != null) {
+                      await FirebaseFirestore.instance
+                          .collection('users')
+                          .doc(currentUser.uid)
+                          .set({
+                        'lastLogin': Timestamp.now(),
+                      }, SetOptions(merge: true));
+                    }
+
+                    // ✅ Navigate to home
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(builder: (_) => const HomeScreen()),
+                    );
                   } on FirebaseAuthException catch (e) {
                     String message;
                     switch (e.code) {
                       case 'user-not-found':
-                        message = 'This email’s a stranger to us. Want to sign up instead?';
+                        message =
+                            'This email’s a stranger to us. Want to sign up instead?';
                         break;
                       case 'wrong-password':
                       case 'invalid-credential':
-                        message = 'That password wasn’t quite right — give it another shot';
+                        message =
+                            'That password wasn’t quite right — give it another shot';
                         break;
                       case 'invalid-email':
-                        message = 'We love creativity, but that’s not a valid email';
+                        message =
+                            'We love creativity, but that’s not a valid email';
                         break;
                       case 'email-already-in-use':
-                        message = 'Looks like you’ve already joined the Boxed club. Welcome back?';
+                        message =
+                            'Looks like you’ve already joined the Boxed club. Welcome back?';
                         break;
                       case 'weak-password':
-                        message = 'Your password needs a protein shake — at least 6 characters';
+                        message =
+                            'Your password needs a protein shake — at least 6 characters';
                         break;
                       default:
                         message = 'Authentication error: ${e.message}';
                     }
 
-                    if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
+                    if (e.code == 'wrong-password' ||
+                        e.code == 'invalid-credential') {
                       _showFieldErrors(passwordMsg: message);
                     } else if (e.code == 'user-not-found' ||
                         e.code == 'invalid-email' ||
@@ -365,8 +375,9 @@ Future<void> _signInWithApple() async {
                       _showFieldErrors(emailMsg: message);
                     }
                   } catch (e) {
-                    print('Login/SignUp error: $e');
-                    _showFieldErrors(emailMsg: 'An unexpected error occurred. Please try again.');
+                    _showFieldErrors(
+                      emailMsg: 'An unexpected error occurred. Please try again.',
+                    );
                   }
                 },
               ),
