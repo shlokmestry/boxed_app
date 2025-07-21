@@ -31,7 +31,7 @@ class SettingsScreen extends StatelessWidget {
             "Edit Profile",
             onTap: () {
               Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const EditProfileScreen()));
+                  MaterialPageRoute(builder: (_) => const EditProfileScreen()));
             },
           ),
           _buildOption(
@@ -39,10 +39,9 @@ class SettingsScreen extends StatelessWidget {
             "Delete Account",
             onTap: () {
               Navigator.push(context,
-                MaterialPageRoute(builder: (_) => const DeleteAccountScreen()));
+                  MaterialPageRoute(builder: (_) => const DeleteAccountScreen()));
             },
           ),
-
           const SizedBox(height: 30),
           Text("Appearance", style: _sectionStyle(context)),
           _buildOption(
@@ -53,10 +52,12 @@ class SettingsScreen extends StatelessWidget {
                 context: context,
                 builder: (_) => const ThemePickerSheet(),
                 backgroundColor: colorScheme.background,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                ),
               );
             },
           ),
-
           const SizedBox(height: 30),
           Text("Privacy & Security", style: _sectionStyle(context)),
           _buildOption(
@@ -75,13 +76,11 @@ class SettingsScreen extends StatelessWidget {
               );
             },
           ),
-
           const SizedBox(height: 30),
           Text("Support", style: _sectionStyle(context)),
           _buildOption(context, "FAQ", onTap: () {}),
           _buildOption(context, "Contact Support", onTap: () {}),
           _buildOption(context, "Report a Bug", onTap: () {}),
-
           const SizedBox(height: 30),
           Text("About", style: _sectionStyle(context)),
           _buildOption(context, "Privacy Policy", onTap: () {}),

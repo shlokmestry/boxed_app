@@ -12,13 +12,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'package:provider/provider.dart';
-import 'providers/theme_provider.dart'; // <-- Make sure this file uses the improved code
+import 'providers/theme_provider.dart'; // <-- Updated ThemeProvider with full support
 
-// Initialize the plugin for showing notifications
+// Initialize flutter local notifications
 final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
     FlutterLocalNotificationsPlugin();
 
-// Setup local notifications
+// Local notifications setup
 void setupFlutterNotifications() {
   const AndroidInitializationSettings initializationSettingsAndroid =
       AndroidInitializationSettings('@mipmap/ic_launcher');
@@ -29,10 +29,10 @@ void setupFlutterNotifications() {
   flutterLocalNotificationsPlugin.initialize(initializationSettings);
 }
 
-// Show notification when message received in foreground
+// Show notification when in foreground
 void showNotification(RemoteMessage message) {
-  RemoteNotification? notification = message.notification;
-  AndroidNotification? android = message.notification?.android;
+  final notification = message.notification;
+  final android = message.notification?.android;
 
   if (notification != null && android != null) {
     flutterLocalNotificationsPlugin.show(
@@ -61,24 +61,25 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
-  // Background messages
+  // Background messages handler
   FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-  // Local notification setup
+  // Setup local notifications
   setupFlutterNotifications();
 
-  // Foreground listener
+  // Foreground message listener
   FirebaseMessaging.onMessage.listen((RemoteMessage message) {
-    print('Got a message in foreground!');
+    print('🔥 Foreground notification');
     print("Title: ${message.notification?.title}");
     print("Body: ${message.notification?.body}");
-    print("Data payload: ${message.data}");
-    showNotification(message); // Manually show notification
+    print("Data: ${message.data}");
+    showNotification(message); // Manual trigger
   });
 
+  // Run the app with ThemeProvider
   runApp(
     ChangeNotifierProvider(
-      create: (_) => ThemeProvider(), // This provider is needed for theme switching!
+      create: (_) => ThemeProvider(), // NOW supports dark, light, system
       child: const MyApp(),
     ),
   );
@@ -94,6 +95,7 @@ class MyApp extends StatelessWidget {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
           title: 'Boxed',
+
           theme: ThemeData.light().copyWith(
             scaffoldBackgroundColor: Colors.white,
             colorScheme: const ColorScheme.light(
@@ -106,6 +108,7 @@ class MyApp extends StatelessWidget {
               titleTextStyle: TextStyle(color: Colors.teal, fontSize: 20),
             ),
           ),
+
           darkTheme: ThemeData.dark().copyWith(
             scaffoldBackgroundColor: Colors.black,
             colorScheme: const ColorScheme.dark(
@@ -118,8 +121,9 @@ class MyApp extends StatelessWidget {
               titleTextStyle: TextStyle(color: Colors.teal, fontSize: 20),
             ),
           ),
-          themeMode: themeProvider.themeMode,
-          home: const SplashScreen(),
+
+          themeMode: themeProvider.themeMode, // Realtime theme switching
+          home: const SplashScreen(), // Initial screen
         );
       },
     );

@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-enum AppThemeMode { dark, light }
-
 class ThemeProvider extends ChangeNotifier {
-  ThemeMode _themeMode = ThemeMode.dark;
+  static const _themePrefKey = 'theme_mode';
+
+  ThemeMode _themeMode = ThemeMode.system;
 
   ThemeProvider() {
     _loadTheme();
@@ -12,27 +12,50 @@ class ThemeProvider extends ChangeNotifier {
 
   ThemeMode get themeMode => _themeMode;
 
-  Future<void> setTheme(AppThemeMode mode) async {
-    final prefs = await SharedPreferences.getInstance();
-    // Save a clean string ('dark' or 'light')
-    prefs.setString('theme_mode', mode.name);
-
-    if (mode == AppThemeMode.dark) {
-      _themeMode = ThemeMode.dark;
-    } else {
-      _themeMode = ThemeMode.light;
-    }
+  /// Saves & applies theme mode (light/dark/system)
+  Future<void> setThemeMode(ThemeMode mode) async {
+    _themeMode = mode;
     notifyListeners();
+
+    final prefs = await SharedPreferences.getInstance();
+    String modeString;
+    switch (mode) {
+      case ThemeMode.light:
+        modeString = 'light';
+        break;
+      case ThemeMode.dark:
+        modeString = 'dark';
+        break;
+      case ThemeMode.system:
+      default:
+        modeString = 'system';
+        break;
+    }
+
+    await prefs.setString(_themePrefKey, modeString);
   }
 
+  /// Loads theme mode from SharedPreferences
   Future<void> _loadTheme() async {
     final prefs = await SharedPreferences.getInstance();
-    final themeString = prefs.getString('theme_mode');
-    if (themeString == null || themeString == 'dark') {
-      _themeMode = ThemeMode.dark;
-    } else {
-      _themeMode = ThemeMode.light;
+    final stored = prefs.getString(_themePrefKey);
+
+    switch (stored) {
+      case 'light':
+        _themeMode = ThemeMode.light;
+        break;
+      case 'dark':
+        _themeMode = ThemeMode.dark;
+        break;
+      case 'system':
+      default:
+        _themeMode = ThemeMode.system;
+        break;
     }
+
     notifyListeners();
   }
+
+  /// Optional: True if the selected theme is dark (for conditional UI logic)
+  bool get isDarkModeEnabled => _themeMode == ThemeMode.dark;
 }

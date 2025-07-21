@@ -1,36 +1,62 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../providers/theme_provider.dart';
+import 'package:boxed_app/providers/theme_provider.dart'; // adjust path as needed
 
 class ThemePickerSheet extends StatelessWidget {
   const ThemePickerSheet({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final themeProvider = Provider.of<ThemeProvider>(context, listen: true);
-    return SafeArea(
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final currentThemeMode = themeProvider.themeMode;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ListTile(
-            leading: const Icon(Icons.nights_stay, color: Colors.white70),
-            title: const Text('Dark Mode', style: TextStyle(color: Colors.white)),
-            trailing: themeProvider.themeMode == ThemeMode.dark
-                ? const Icon(Icons.check, color: Colors.white)
-                : null,
-            onTap: () {
-              themeProvider.setTheme(AppThemeMode.dark);
+          RadioListTile<ThemeMode>(
+            value: ThemeMode.light,
+            groupValue: currentThemeMode,
+            title: Row(
+              children: [
+                Icon(Icons.light_mode, color: Colors.amber),
+                const SizedBox(width: 12),
+                const Text("Light Mode"),
+              ],
+            ),
+            onChanged: (mode) {
+              themeProvider.setThemeMode(ThemeMode.light);
               Navigator.pop(context);
             },
           ),
-          ListTile(
-            leading: const Icon(Icons.wb_sunny, color: Colors.white70),
-            title: const Text('Light Mode', style: TextStyle(color: Colors.white)),
-            trailing: themeProvider.themeMode == ThemeMode.light
-                ? const Icon(Icons.check, color: Colors.white)
-                : null,
-            onTap: () {
-              themeProvider.setTheme(AppThemeMode.light);
+          RadioListTile<ThemeMode>(
+            value: ThemeMode.dark,
+            groupValue: currentThemeMode,
+            title: Row(
+              children: [
+                Icon(Icons.dark_mode, color: Colors.deepPurple),
+                const SizedBox(width: 12),
+                const Text("Dark Mode"),
+              ],
+            ),
+            onChanged: (mode) {
+              themeProvider.setThemeMode(ThemeMode.dark);
+              Navigator.pop(context);
+            },
+          ),
+          RadioListTile<ThemeMode>(
+            value: ThemeMode.system,
+            groupValue: currentThemeMode,
+            title: Row(
+              children: [
+                Icon(Icons.phone_android, color: Colors.blue),
+                const SizedBox(width: 12),
+                const Text("System Default"),
+              ],
+            ),
+            onChanged: (mode) {
+              themeProvider.setThemeMode(ThemeMode.system);
               Navigator.pop(context);
             },
           ),
