@@ -87,8 +87,95 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Boxed',
-      theme: ThemeData.light(),
-      darkTheme: ThemeData.dark(),
+      theme: ThemeData(
+        // Light theme
+        scaffoldBackgroundColor: Colors.white,
+        appBarTheme: AppBarTheme(
+          backgroundColor: Colors.white,
+          foregroundColor: Colors.black,
+          iconTheme: IconThemeData(color: Colors.black),
+          titleTextStyle: TextStyle(
+            color: Colors.black,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        textTheme: TextTheme(
+          displayLarge: TextStyle(color: Colors.black),
+          displayMedium: TextStyle(color: Colors.black),
+          displaySmall: TextStyle(color: Colors.black),
+          headlineLarge: TextStyle(color: Colors.black),
+          headlineMedium: TextStyle(color: Colors.black),
+          headlineSmall: TextStyle(color: Colors.black),
+          titleLarge: TextStyle(color: Colors.black),
+          titleMedium: TextStyle(color: Colors.black),
+          titleSmall: TextStyle(color: Colors.black),
+          bodyLarge: TextStyle(color: Colors.black),
+          bodyMedium: TextStyle(color: Colors.black),
+          bodySmall: TextStyle(color: Colors.black),
+        ), colorScheme: ColorScheme.light(
+          primary: Colors.black,
+          onPrimary: Colors.white,
+          secondary: Colors.black,
+          onSecondary: Colors.white,
+          background: Colors.white,
+          onBackground: Colors.black,
+          surface: Color(0xFFF4F4F4),
+          onSurface: Colors.black,
+          error: Colors.red,
+          onError: Colors.white,
+        ).copyWith(background: Colors.white),
+      ),
+      darkTheme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: Colors.black,
+        primaryColor: Colors.white,
+        appBarTheme: AppBarTheme(
+          backgroundColor: Colors.black,
+          foregroundColor: Colors.white,
+          iconTheme: IconThemeData(color: Colors.white),
+          titleTextStyle: TextStyle(
+            color: Colors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        textTheme: TextTheme(
+          displayLarge: TextStyle(color: Colors.white),
+          displayMedium: TextStyle(color: Colors.white),
+          displaySmall: TextStyle(color: Colors.white),
+          headlineLarge: TextStyle(color: Colors.white),
+          headlineMedium: TextStyle(color: Colors.white),
+          headlineSmall: TextStyle(color: Colors.white),
+          titleLarge: TextStyle(color: Colors.white),
+          titleMedium: TextStyle(color: Colors.white),
+          titleSmall: TextStyle(color: Colors.white),
+          bodyLarge: TextStyle(color: Colors.white),
+          bodyMedium: TextStyle(color: Colors.white),
+          bodySmall: TextStyle(color: Colors.white),
+          labelLarge: TextStyle(color: Colors.white),
+          labelMedium: TextStyle(color: Colors.white),
+          labelSmall: TextStyle(color: Colors.white),
+        ),
+        iconTheme: IconThemeData(color: Colors.white),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            foregroundColor: Colors.black,
+            backgroundColor: Colors.white,
+          ),
+        ), colorScheme: ColorScheme.dark(
+          primary: Colors.white,
+          onPrimary: Colors.black,
+          secondary: Colors.white,
+          onSecondary: Colors.black,
+          background: Colors.black,
+          onBackground: Colors.white,
+          surface: Color(0xFF222222),
+          onSurface: Colors.white,
+          error: Colors.red,
+          onError: Colors.white,
+        ).copyWith(background: Colors.black),
+      ),
       themeMode: themeProvider.themeMode,
       home: FutureBuilder<bool>(
         future: _getOnboardingSeen(),
@@ -101,7 +188,7 @@ class MyApp extends StatelessWidget {
 
           final onboardingSeen = onboardingSnapshot.data!;
           if (!onboardingSeen) {
-            return const SplashScreen(); // ❗ First-time users
+            return const SplashScreen();
           }
 
           return StreamBuilder<User?>(
@@ -116,12 +203,10 @@ class MyApp extends StatelessWidget {
               }
 
               final user = authSnapshot.data;
-
               if (user == null) {
-                return const LoginSignup(); // Not signed in
+                return const LoginSignup();
               }
 
-              // Signed in — check for 'username'
               return FutureBuilder<DocumentSnapshot>(
                 future: FirebaseFirestore.instance
                     .collection('users')
@@ -134,8 +219,7 @@ class MyApp extends StatelessWidget {
                     );
                   }
 
-                  final data =
-                      userDocSnapshot.data!.data() as Map<String, dynamic>?;
+                  final data = userDocSnapshot.data!.data() as Map<String, dynamic>?;
 
                   final hasUsername = data != null &&
                       data.containsKey('username') &&
