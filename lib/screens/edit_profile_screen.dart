@@ -24,6 +24,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   String? _photoUrl;
 
   bool _isLoading = true;
+  bool _isUploadingImage = false;
   String? _error;
 
   @override
@@ -36,7 +37,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    final doc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
     final data = doc.data();
 
     setState(() {
@@ -49,7 +53,8 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _pickImage() async {
-    final picked = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
+    final picked =
+        await _picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
     if (picked != null) {
       setState(() => _newImage = File(picked.path));
     }
@@ -62,9 +67,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           .ref()
           .child('profile_images')
           .child('$uid-${DateTime.now().millisecondsSinceEpoch}.jpg');
+      setState(() => _isUploadingImage = true);
       final uploadTask = await ref.putFile(file);
-      return await uploadTask.ref.getDownloadURL();
+      final downloadUrl = await uploadTask.ref.getDownloadURL();
+      setState(() => _isUploadingImage = false);
+      return downloadUrl;
     } catch (e) {
+      setState(() => _isUploadingImage = false);
       print('Image upload failed: $e');
       return null;
     }
@@ -86,18 +95,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       if (_newImage != null) {
         imageUrl = await _uploadImage(_newImage!);
       }
+
       await FirebaseFirestore.instance.collection('users').doc(uid).update({
         'firstName': _firstName!.trim(),
         'lastName': _lastName!.trim(),
-        'username': _username!.trim(),
+        // Username intentionally not updated
         'photoUrl': imageUrl,
       });
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text("Profile updated!")),
-      );
-      Navigator.pop(context);
+      Navigator.pop(context, true);
     } catch (e) {
       setState(() => _error = "Failed to save profile");
       print("Error saving profile: $e");
@@ -128,36 +135,39 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 child: ListView(
                   children: [
                     Center(
-                      child: Stack(
-                        children: [
-                          CircleAvatar(
-                            radius: 50,
-                            backgroundImage: _newImage != null
-                                ? FileImage(_newImage!)
-                                : (_photoUrl != null && _photoUrl!.isNotEmpty)
-                                    ? NetworkImage(_photoUrl!) as ImageProvider
-                                    : null,
-                            backgroundColor: colorScheme.surface,
-                            child: (_newImage == null &&
-                                    (_photoUrl == null || _photoUrl!.isEmpty))
-                                ? Icon(Icons.person,
-                                    color: colorScheme.onSurface, size: 50)
-                                : null,
-                          ),
-                          Positioned(
-                            bottom: 0,
-                            right: 0,
-                            child: IconButton(
-                              icon: Icon(Icons.edit, color: colorScheme.onSurface),
-                              onPressed: _pickImage,
+                      child: GestureDetector(
+                        onTap: _pickImage,
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            CircleAvatar(
+                              radius: 44,
+                              backgroundImage: _newImage != null
+                                  ? FileImage(_newImage!)
+                                  : (_photoUrl != null && _photoUrl!.isNotEmpty)
+                                      ? NetworkImage(_photoUrl!) as ImageProvider
+                                      : null,
+                              backgroundColor: colorScheme.surface,
+                              child: (_newImage == null &&
+                                      (_photoUrl == null || _photoUrl!.isEmpty))
+                                  ? Icon(Icons.person,
+                                      color: colorScheme.onSurface, size: 44)
+                                  : null,
                             ),
-                          ),
-                        ],
+                            if (_isUploadingImage)
+                              const SizedBox(
+                                width: 64,
+                                height: 64,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              ),
+                          ],
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 28),
                     if (_error != null) ...[
-                      Text(_error!, style: TextStyle(color: colorScheme.error)),
+                      Text(_error!,
+                          style: TextStyle(color: colorScheme.error)),
                       const SizedBox(height: 8),
                     ],
                     TextFormField(
@@ -165,36 +175,49 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       style: TextStyle(color: colorScheme.onBackground),
                       decoration: _inputDecoration(context, 'First Name'),
                       validator: (value) =>
-                          value == null || value.trim().isEmpty ? 'Required' : null,
+                          value == null || value.trim().isEmpty
+                              ? 'Required'
+                              : null,
                       onSaved: (value) => _firstName = value,
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
                     TextFormField(
                       initialValue: _lastName ?? "",
                       style: TextStyle(color: colorScheme.onBackground),
                       decoration: _inputDecoration(context, 'Last Name'),
                       onSaved: (value) => _lastName = value,
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
                     TextFormField(
                       initialValue: _username ?? "",
-                      style: TextStyle(color: colorScheme.onBackground),
-                      decoration: _inputDecoration(context, 'Username'),
-                      validator: (value) =>
-                          value == null || value.trim().isEmpty ? 'Required' : null,
-                      onSaved: (value) => _username = value,
-                    ),
-                    const SizedBox(height: 24),
-                    ElevatedButton(
-                      onPressed: _saveProfile,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: colorScheme.primary,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                      enabled: false,
+                      style: TextStyle(
+                        color: colorScheme.onBackground.withOpacity(0.6),
+                      ),
+                      decoration: _inputDecoration(context, 'Username').copyWith(
+                        // No lock icon used
+                        hintStyle: TextStyle(
+                          color: colorScheme.onSurface.withOpacity(0.4),
                         ),
                       ),
-                      child: const Text("Save"),
+                    ),
+                    const SizedBox(height: 28),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: _isUploadingImage ? null : _saveProfile,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: colorScheme.primary,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          textStyle: textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        child: const Text("Save"),
+                      ),
                     ),
                   ],
                 ),
