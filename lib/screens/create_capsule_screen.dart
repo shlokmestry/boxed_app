@@ -1,10 +1,12 @@
 import 'dart:io';
+import 'package:boxed_app/widgets/collaborator_picker_dialog.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:boxed_app/encryption/capsule_encryption.dart';
+
 
 class CreateCapsuleScreen extends StatefulWidget {
   const CreateCapsuleScreen({super.key});
@@ -17,8 +19,6 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _noteController = TextEditingController();
-  final TextEditingController _collaboratorSearchController =
-      TextEditingController();
 
   DateTime? _selectedDateTime;
   bool _isLoading = false;
@@ -33,49 +33,6 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
   ];
 
   final List<Map<String, dynamic>> _collaborators = [];
-  List<Map<String, dynamic>> _userSearchResults = [];
-
-  Future<void> _searchUsers(String query) async {
-    if (query.isEmpty) {
-      setState(() => _userSearchResults = []);
-      return;
-    }
-
-    final result = await FirebaseFirestore.instance
-        .collection('users')
-        .where('username', isGreaterThanOrEqualTo: query)
-        .where('username', isLessThanOrEqualTo: query + '\uf8ff')
-        .limit(10)
-        .get();
-
-    setState(() {
-      _userSearchResults = result.docs.map((doc) {
-        return {
-          'userId': doc.id,
-          'username': doc['username'] ?? '',
-          'email': doc['email'] ?? '',
-        };
-      }).toList();
-    });
-  }
-
-  void _addCollaborator(Map<String, dynamic> user) {
-    final alreadyAdded =
-        _collaborators.any((c) => c['userId'] == user['userId']);
-    if (!alreadyAdded) {
-      setState(() {
-        _collaborators.add(user);
-        _collaboratorSearchController.clear();
-        _userSearchResults.clear();
-      });
-    }
-  }
-
-  void _removeCollaborator(String userId) {
-    setState(() {
-      _collaborators.removeWhere((c) => c['userId'] == userId);
-    });
-  }
 
   Future<void> _selectDate() async {
     final now = DateTime.now();
@@ -106,12 +63,10 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
 
   Future<void> _pickImages() async {
     final pickedFiles = await _picker.pickMultiImage();
-    if (pickedFiles != null) {
-      setState(() {
-        _selectedImages.addAll(pickedFiles.map((x) => File(x.path)));
-      });
+    setState(() {
+      _selectedImages.addAll(pickedFiles.map((x) => File(x.path)));
+    });
     }
-  }
 
   void _removeImage(File file) {
     setState(() {
@@ -151,6 +106,7 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
         'creatorId': currentUser.uid,
         'unlockDate': Timestamp.fromDate(_selectedDateTime!),
         'memberIds': [currentUser.uid, ..._collaborators.map((c) => c['userId'])],
+        'collaborators': _collaborators,
         'createdAt': Timestamp.now(),
         'isLocked': true,
         'aesKey': aesKey,
@@ -177,9 +133,7 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
       // Add note
       if (_noteController.text.trim().isNotEmpty) {
         final encrypted = CapsuleEncryption.encryptMemory(
-          _noteController.text.trim(),
-          aesKey,
-        );
+            _noteController.text.trim(), aesKey);
         await capsuleRef.collection('memories').add({
           'type': 'note',
           'uploaderId': currentUser.uid,
@@ -198,6 +152,20 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
       );
     } finally {
       setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _openCollaboratorPicker() async {
+    final result = await showDialog<List<Map<String, dynamic>>>(
+      context: context,
+      builder: (context) => const CollaboratorPickerDialog(),
+    );
+
+    if (result != null) {
+      setState(() {
+        _collaborators.clear();
+        _collaborators.addAll(result);
+      });
     }
   }
 
@@ -221,8 +189,7 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
             const SizedBox(height: 16),
 
             _sectionLabel(context, "Description"),
-            _buildInput(_descriptionController, 'What’s this about?',
-                maxLines: 4),
+            _buildInput(_descriptionController, 'What’s this about?', maxLines: 4),
             const SizedBox(height: 16),
 
             _sectionLabel(context, "Unlock Date"),
@@ -272,42 +239,27 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
                 ),
               ),
             ),
-
             const SizedBox(height: 24),
-            _sectionLabel(context, "Add Collaborators"),
-            TextField(
-              controller: _collaboratorSearchController,
-              onChanged: _searchUsers,
-              decoration: InputDecoration(
-                hintText: 'Search by username...',
-                filled: true,
-                fillColor: colorScheme.surface,
+
+            _sectionLabel(context, "Collaborators"),
+            ElevatedButton.icon(
+              onPressed: _openCollaboratorPicker,
+              icon: const Icon(Icons.group_add),
+              label: const Text("Add Collaborators"),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                backgroundColor: colorScheme.primary,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
             ),
             const SizedBox(height: 8),
-            if (_userSearchResults.isNotEmpty)
-              Container(
-                decoration: BoxDecoration(
-                  color: colorScheme.surfaceVariant,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: ListView(
-                  shrinkWrap: true,
-                  children: _userSearchResults.map((user) {
-                    return ListTile(
-                      title: Text(user['username'] ?? ''),
-                      subtitle: Text(user['email'] ?? ''),
-                      onTap: () => _addCollaborator(user),
-                    );
-                  }).toList(),
-                ),
-              ),
             _buildCollaboratorChips(),
 
             const SizedBox(height: 24),
             _sectionLabel(context, "Write a Note"),
-            _buildInput(_noteController, 'Leave something inside...',
-                maxLines: 3),
+            _buildInput(_noteController, 'Leave something inside...', maxLines: 3),
 
             const SizedBox(height: 24),
             _sectionLabel(context, "Add Images"),
@@ -353,6 +305,13 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
                       onPressed: _createCapsule,
                       child: const Text("Create Capsule",
                           style: TextStyle(fontSize: 16)),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        backgroundColor: colorScheme.primary,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
                     ),
                   ),
           ],
@@ -365,9 +324,15 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     return Wrap(
       spacing: 8,
       children: _collaborators.map((c) {
+        final avatar = c['photoUrl'] != null && c['photoUrl'].toString().isNotEmpty
+            ? NetworkImage(c['photoUrl'])
+            : null;
         return Chip(
-          label: Text(c['username'] ?? ''),
-          onDeleted: () => _removeCollaborator(c['userId'] ?? ''),
+          avatar: avatar != null
+              ? CircleAvatar(backgroundImage: avatar)
+              : CircleAvatar(child: Text((c['username'] ?? '?')[0].toUpperCase())),
+          label: Text('${c['username']} (${c['role']})'),
+          onDeleted: () => _removeImage(c as File),
         );
       }).toList(),
     );
@@ -402,4 +367,5 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
       ),
     );
   }
+
 }
