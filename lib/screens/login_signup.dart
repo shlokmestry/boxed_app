@@ -4,7 +4,10 @@ import 'home_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'package:boxed_app/screens/choose_username_screen.dart';
+import 'dart:io';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+
 
 class LoginSignup extends StatefulWidget {
   const LoginSignup({super.key});
@@ -51,6 +54,98 @@ class _LoginSignupState extends State<LoginSignup> {
       passwordError = passwordMsg;
     });
   }
+
+  Future<void> _signInWithGoogle() async {
+  try {
+    final googleUser = await GoogleSignIn().signIn();
+    if (googleUser == null) return;
+
+    final googleAuth = await googleUser.authentication;
+    final credential = GoogleAuthProvider.credential(
+      accessToken: googleAuth.accessToken,
+      idToken: googleAuth.idToken,
+    );
+
+    final userCred = await FirebaseAuth.instance.signInWithCredential(credential);
+    final user = userCred.user;
+
+    if (user != null) {
+      final docRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
+      final doc = await docRef.get();
+
+      if (!doc.exists) {
+        final now = Timestamp.now();
+        await docRef.set({
+          'firstName': user.displayName?.split(' ').first ?? '',
+          'lastName': user.displayName?.split(' ').last ?? '',
+          'username': user.email?.split('@').first ?? '',
+          'email': user.email,
+          'photoUrl': user.photoURL,
+          'bio': '',
+          'createdAt': now,
+          'darkMode': false,
+        });
+      }
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+      );
+    }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Google sign-in failed: $e')),
+    );
+  }
+}
+
+
+Future<void> _signInWithApple() async {
+  try {
+    final appleCredential = await SignInWithApple.getAppleIDCredential(
+      scopes: [AppleIDAuthorizationScopes.email, AppleIDAuthorizationScopes.fullName],
+    );
+
+    final oauthCredential = OAuthProvider("apple.com").credential(
+      idToken: appleCredential.identityToken,
+      accessToken: appleCredential.authorizationCode,
+    );
+
+    final userCred = await FirebaseAuth.instance.signInWithCredential(oauthCredential);
+    final user = userCred.user;
+
+    if (user != null) {
+      final docRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
+      final doc = await docRef.get();
+
+      if (!doc.exists) {
+        final now = Timestamp.now();
+        await docRef.set({
+          'firstName': appleCredential.givenName ?? '',
+          'lastName': appleCredential.familyName ?? '',
+          'username': user.email?.split('@').first ?? 'apple_user',
+          'email': user.email,
+          'photoUrl': null,
+          'bio': '',
+          'createdAt': now,
+          'darkMode': false,
+        });
+      }
+
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const HomeScreen()),
+      );
+    }
+  } catch (e) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('Apple sign-in failed: $e')),
+    );
+  }
+}
+
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -275,6 +370,50 @@ class _LoginSignupState extends State<LoginSignup> {
                   }
                 },
               ),
+
+              const SizedBox(height: 20),
+Row(children: <Widget>[
+  Expanded(child: Divider(color: Colors.grey)),
+  const Padding(
+    padding: EdgeInsets.symmetric(horizontal: 8),
+    child: Text('or', style: TextStyle(color: Colors.grey)),
+  ),
+  Expanded(child: Divider(color: Colors.grey)),
+]),
+const SizedBox(height: 16),
+
+if (Platform.isIOS)
+  Column(
+    children: [
+      SizedBox(
+  width: double.infinity,
+  height: 50,
+  child: OutlinedButton.icon(
+    onPressed: _signInWithApple,
+    icon: const Icon(Icons.apple, color: Colors.black),
+    label: const Text(
+      "Continue with Apple",
+      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+    ),
+    style: OutlinedButton.styleFrom(
+      backgroundColor: Colors.white,
+      foregroundColor: Colors.black,
+      side: const BorderSide(color: Colors.transparent),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
+    ),
+  ),
+),
+
+      SizedBox(height: 10),
+      _googleButton(),
+    ],
+  )
+else
+  _googleButton(),
+
+              
               const SizedBox(height: 10),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -309,9 +448,28 @@ class _LoginSignupState extends State<LoginSignup> {
       ),
     );
   }
+Widget _googleButton() {
+  return SizedBox(
+    width: double.infinity, 
+    height: 50,             
+    child: OutlinedButton.icon(
+      onPressed: _signInWithGoogle,
+      icon: Image.asset('assets/google_icon.png', height: 24), 
+      label: const Text(
+        "Continue with Google",
+        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
+      ),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: Colors.black,
+        backgroundColor: Colors.white,
+        side: const BorderSide(color: Colors.transparent),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8), 
+        ),
+      ),
+    ),
+  );
+}
 
-  String _capitalize(String s) {
-    if (s.isEmpty) return '';
-    return s[0].toUpperCase() + s.substring(1);
-  }
+
 }
