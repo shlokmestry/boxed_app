@@ -17,7 +17,8 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _noteController = TextEditingController();
-  final TextEditingController _collaboratorEmailController = TextEditingController();
+  final TextEditingController _collaboratorSearchController =
+      TextEditingController();
 
   DateTime? _selectedDateTime;
   bool _isLoading = false;
@@ -32,6 +33,49 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
   ];
 
   final List<Map<String, dynamic>> _collaborators = [];
+  List<Map<String, dynamic>> _userSearchResults = [];
+
+  Future<void> _searchUsers(String query) async {
+    if (query.isEmpty) {
+      setState(() => _userSearchResults = []);
+      return;
+    }
+
+    final result = await FirebaseFirestore.instance
+        .collection('users')
+        .where('username', isGreaterThanOrEqualTo: query)
+        .where('username', isLessThanOrEqualTo: query + '\uf8ff')
+        .limit(10)
+        .get();
+
+    setState(() {
+      _userSearchResults = result.docs.map((doc) {
+        return {
+          'userId': doc.id,
+          'username': doc['username'] ?? '',
+          'email': doc['email'] ?? '',
+        };
+      }).toList();
+    });
+  }
+
+  void _addCollaborator(Map<String, dynamic> user) {
+    final alreadyAdded =
+        _collaborators.any((c) => c['userId'] == user['userId']);
+    if (!alreadyAdded) {
+      setState(() {
+        _collaborators.add(user);
+        _collaboratorSearchController.clear();
+        _userSearchResults.clear();
+      });
+    }
+  }
+
+  void _removeCollaborator(String userId) {
+    setState(() {
+      _collaborators.removeWhere((c) => c['userId'] == userId);
+    });
+  }
 
   Future<void> _selectDate() async {
     final now = DateTime.now();
@@ -99,31 +143,30 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     try {
       final aesKey = CapsuleEncryption.generateAESKey();
 
-      final docRef = await FirebaseFirestore.instance.collection('capsules').add({
+      final capsuleRef = await FirebaseFirestore.instance
+          .collection('capsules')
+          .add({
         'name': _nameController.text.trim(),
         'description': _descriptionController.text.trim(),
         'creatorId': currentUser.uid,
         'unlockDate': Timestamp.fromDate(_selectedDateTime!),
-        'memberIds': [currentUser.uid],
+        'memberIds': [currentUser.uid, ..._collaborators.map((c) => c['userId'])],
         'createdAt': Timestamp.now(),
         'isLocked': true,
         'aesKey': aesKey,
         'backgroundId': _selectedBackground,
       });
 
+      // Upload images
       for (final image in _selectedImages) {
         final filename = DateTime.now().millisecondsSinceEpoch.toString();
         final ref = FirebaseStorage.instance
             .ref()
-            .child('capsules/${docRef.id}/$filename.jpg');
+            .child('capsules/${capsuleRef.id}/$filename.jpg');
         final upload = await ref.putFile(image);
         final url = await upload.ref.getDownloadURL();
 
-        await FirebaseFirestore.instance
-            .collection('capsules')
-            .doc(docRef.id)
-            .collection('memories')
-            .add({
+        await capsuleRef.collection('memories').add({
           'type': 'image',
           'uploaderId': currentUser.uid,
           'timestamp': Timestamp.now(),
@@ -131,14 +174,13 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
         });
       }
 
+      // Add note
       if (_noteController.text.trim().isNotEmpty) {
         final encrypted = CapsuleEncryption.encryptMemory(
-            _noteController.text.trim(), aesKey);
-        await FirebaseFirestore.instance
-            .collection('capsules')
-            .doc(docRef.id)
-            .collection('memories')
-            .add({
+          _noteController.text.trim(),
+          aesKey,
+        );
+        await capsuleRef.collection('memories').add({
           'type': 'note',
           'uploaderId': currentUser.uid,
           'timestamp': Timestamp.now(),
@@ -146,30 +188,13 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
         });
       }
 
-      if (_collaboratorEmailController.text.trim().isNotEmpty) {
-        final collaboratorQuery = await FirebaseFirestore.instance
-            .collection('users')
-            .where('email', isEqualTo: _collaboratorEmailController.text.trim())
-            .limit(1)
-            .get();
-        if (collaboratorQuery.docs.isNotEmpty) {
-          final uid = collaboratorQuery.docs.first.id;
-          await FirebaseFirestore.instance
-              .collection('capsules')
-              .doc(docRef.id)
-              .update({
-            'memberIds': FieldValue.arrayUnion([uid]),
-          });
-        }
-      }
-
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Capsule created successfully!')),
+        const SnackBar(content: Text('Capsule created!')),
       );
       Navigator.pop(context);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error: $e")),
+        SnackBar(content: Text('Error: $e')),
       );
     } finally {
       setState(() => _isLoading = false);
@@ -180,21 +205,12 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+
     return Scaffold(
       appBar: AppBar(
-        title: Text(
-          "🎁 Create Capsule",
-          style: textTheme.titleLarge?.copyWith(
-            color: colorScheme.primary,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        backgroundColor: colorScheme.background,
-        elevation: 0,
+        title: Text("🎁 Create Capsule", style: textTheme.titleLarge),
         centerTitle: true,
-        iconTheme: IconThemeData(color: colorScheme.primary),
       ),
-      backgroundColor: colorScheme.background,
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
         child: Column(
@@ -202,86 +218,141 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
           children: [
             _sectionLabel(context, "Capsule Name"),
             _buildInput(_nameController, 'Enter a title'),
+            const SizedBox(height: 16),
 
-            const SizedBox(height: 24),
             _sectionLabel(context, "Description"),
-            _buildInput(_descriptionController, 'What is this capsule about?', maxLines: 4),
+            _buildInput(_descriptionController, 'What’s this about?',
+                maxLines: 4),
+            const SizedBox(height: 16),
 
-            const SizedBox(height: 24),
             _sectionLabel(context, "Unlock Date"),
             GestureDetector(
               onTap: _selectDate,
               child: Container(
-                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
-                decoration: BoxDecoration(
-                  color: colorScheme.surface,
-                  borderRadius: BorderRadius.circular(12),
-                ),
                 width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: colorScheme.surface,
+                ),
                 child: Text(
                   _selectedDateTime == null
-                      ? 'Select a future date & time'
-                      : 'Opens on: ${_selectedDateTime!.toLocal().toString().replaceFirst(".000", "")}',
-                  style: textTheme.bodyMedium?.copyWith(
-                    color: colorScheme.onSurface,
+                      ? 'Pick unlock date'
+                      : 'Opens on: $_selectedDateTime',
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            _sectionLabel(context, "Background"),
+            SizedBox(
+              height: 90,
+              child: ListView.builder(
+                scrollDirection: Axis.horizontal,
+                itemCount: _backgroundOptions.length,
+                itemBuilder: (_, i) => GestureDetector(
+                  onTap: () => setState(() => _selectedBackground = i),
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 8),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: _selectedBackground == i
+                            ? colorScheme.primary
+                            : Colors.transparent,
+                        width: 2,
+                      ),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.asset(_backgroundOptions[i],
+                          width: 80, fit: BoxFit.cover),
+                    ),
                   ),
                 ),
               ),
             ),
 
             const SizedBox(height: 24),
-            _sectionLabel(context, "Capsule Background"),
-            const SizedBox(height: 10),
-            SizedBox(
-              height: 100,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: _backgroundOptions.length + 1,
-                itemBuilder: (context, idx) {
-                  if (idx == 0) {
-                    return _buildBackgroundThumbnail(
-                      context,
-                      null,
-                      isSelected: _selectedBackground == null,
-                      child: Icon(Icons.close,
-                          size: 36,
-                          color: colorScheme.onSurface.withOpacity(0.5)),
-                    );
-                  } else {
-                    return _buildBackgroundThumbnail(
-                      context,
-                      idx - 1,
-                      isSelected: _selectedBackground == (idx - 1),
-                      imagePath: _backgroundOptions[idx - 1],
-                    );
-                  }
-                },
+            _sectionLabel(context, "Add Collaborators"),
+            TextField(
+              controller: _collaboratorSearchController,
+              onChanged: _searchUsers,
+              decoration: InputDecoration(
+                hintText: 'Search by username...',
+                filled: true,
+                fillColor: colorScheme.surface,
               ),
             ),
+            const SizedBox(height: 8),
+            if (_userSearchResults.isNotEmpty)
+              Container(
+                decoration: BoxDecoration(
+                  color: colorScheme.surfaceVariant,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: ListView(
+                  shrinkWrap: true,
+                  children: _userSearchResults.map((user) {
+                    return ListTile(
+                      title: Text(user['username'] ?? ''),
+                      subtitle: Text(user['email'] ?? ''),
+                      onTap: () => _addCollaborator(user),
+                    );
+                  }).toList(),
+                ),
+              ),
+            _buildCollaboratorChips(),
 
             const SizedBox(height: 24),
-            _mediaAndCollaboratorRow(),
-            const SizedBox(height: 24),
-
             _sectionLabel(context, "Write a Note"),
-            _buildInput(_noteController, 'Leave a message inside the capsule...',
-                maxLines: 4),
+            _buildInput(_noteController, 'Leave something inside...',
+                maxLines: 3),
 
-            const SizedBox(height: 40),
+            const SizedBox(height: 24),
+            _sectionLabel(context, "Add Images"),
+            Wrap(
+              spacing: 8,
+              children: [
+                ..._selectedImages.map((image) => Stack(
+                      alignment: Alignment.topRight,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.file(image,
+                              width: 80, height: 80, fit: BoxFit.cover),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close, size: 16),
+                          onPressed: () => _removeImage(image),
+                        ),
+                      ],
+                    )),
+                GestureDetector(
+                  onTap: _pickImages,
+                  child: Container(
+                    width: 80,
+                    height: 80,
+                    decoration: BoxDecoration(
+                      color: colorScheme.surface,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: colorScheme.outline),
+                    ),
+                    child: const Icon(Icons.add_a_photo),
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 36),
             _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: _createCapsule,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: colorScheme.primary,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text("Create Capsule", style: TextStyle(fontSize: 16)),
+                      child: const Text("Create Capsule",
+                          style: TextStyle(fontSize: 16)),
                     ),
                   ),
           ],
@@ -290,157 +361,45 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     );
   }
 
-  /// Section title label styling
-  Widget _sectionLabel(BuildContext context, String text) {
-    return Text(
-      text,
-      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: Theme.of(context).colorScheme.onBackground,
-          ),
+  Widget _buildCollaboratorChips() {
+    return Wrap(
+      spacing: 8,
+      children: _collaborators.map((c) {
+        return Chip(
+          label: Text(c['username'] ?? ''),
+          onDeleted: () => _removeCollaborator(c['userId'] ?? ''),
+        );
+      }).toList(),
     );
   }
 
-  /// Capsule background thumbnail
-  Widget _buildBackgroundThumbnail(BuildContext context, int? idx,
-      {bool isSelected = false, String? imagePath, Widget? child}) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return GestureDetector(
-      onTap: () => setState(() => _selectedBackground = idx),
-      child: Container(
-        margin: const EdgeInsets.only(right: 12),
-        width: 90,
-        height: 90,
-        decoration: BoxDecoration(
-          border: Border.all(
-            color: isSelected ? colorScheme.primary : Colors.transparent,
-            width: 3,
-          ),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(10),
-          child: imagePath != null
-              ? Image.asset(imagePath, fit: BoxFit.cover)
-              : Container(
-                  alignment: Alignment.center,
-                  color: colorScheme.surface,
-                  child: child,
-                ),
-        ),
+  Widget _sectionLabel(BuildContext context, String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Text(
+        text,
+        style: Theme.of(context)
+            .textTheme
+            .labelLarge
+            ?.copyWith(fontWeight: FontWeight.bold),
       ),
     );
   }
 
-  /// Styled input field
-  Widget _buildInput(TextEditingController controller, String placeholder,
+  Widget _buildInput(TextEditingController controller, String hint,
       {int maxLines = 1}) {
-    final colorScheme = Theme.of(context).colorScheme;
     return TextField(
       controller: controller,
       maxLines: maxLines,
-      style: TextStyle(color: colorScheme.onBackground),
       decoration: InputDecoration(
-        hintText: placeholder,
+        hintText: hint,
         filled: true,
-        fillColor: colorScheme.surface,
+        fillColor: Theme.of(context).colorScheme.surface,
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
+            borderRadius: BorderRadius.circular(12),
+            borderSide: BorderSide.none),
+        contentPadding: const EdgeInsets.all(14),
       ),
-    );
-  }
-
-  /// Media and collaborator sections side-by-side
-  Widget _mediaAndCollaboratorRow() {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _sectionLabel(context, "Upload Photos"),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  ..._selectedImages.map((file) => Stack(
-                        children: [
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.file(
-                              file,
-                              width: 80,
-                              height: 80,
-                              fit: BoxFit.cover,
-                            ),
-                          ),
-                          Positioned(
-                            top: 0,
-                            right: 0,
-                            child: GestureDetector(
-                              onTap: () => _removeImage(file),
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  color: Colors.black45,
-                                  shape: BoxShape.circle,
-                                ),
-                                padding: const EdgeInsets.all(4),
-                                child: const Icon(Icons.close,
-                                    size: 16, color: Colors.white),
-                              ),
-                            ),
-                          ),
-                        ],
-                      )),
-                  GestureDetector(
-                    onTap: _pickImages,
-                    child: Container(
-                      width: 80,
-                      height: 80,
-                      decoration: BoxDecoration(
-                        color: colorScheme.surface,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: colorScheme.outline),
-                      ),
-                      child: Icon(Icons.add_a_photo,
-                          color: colorScheme.onSurface.withOpacity(0.5)),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _sectionLabel(context, "Add Collaborator"),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _collaboratorEmailController,
-                style: TextStyle(color: colorScheme.onBackground),
-                decoration: InputDecoration(
-                  hintText: 'Email',
-                  hintStyle: TextStyle(color: colorScheme.onSurface.withOpacity(0.6)),
-                  filled: true,
-                  fillColor: colorScheme.surface,
-                  contentPadding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: BorderSide.none),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
     );
   }
 }
