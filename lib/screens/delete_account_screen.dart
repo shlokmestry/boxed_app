@@ -32,21 +32,17 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
         return;
       }
 
-      // Reauthenticate
       final cred = EmailAuthProvider.credential(email: email, password: password);
       await user.reauthenticateWithCredential(cred);
 
-      // Delete Firestore user doc
       await FirebaseFirestore.instance.collection('users').doc(user.uid).delete();
-
-      // Delete user
       await user.delete();
 
       _showSnack("Account deleted. Signing you out...");
       await FirebaseAuth.instance.signOut();
 
       if (mounted) {
-        Navigator.of(context).popUntil((route) => route.isFirst); // go back to login/root
+        Navigator.of(context).popUntil((route) => route.isFirst);
       }
     } on FirebaseAuthException catch (e) {
       _showSnack(e.message ?? 'Something went wrong');
@@ -63,33 +59,40 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: colorScheme.background,
       appBar: AppBar(
-        title: const Text('Delete Account'),
-        backgroundColor: Colors.black,
+        title: Text('Delete Account', style: textTheme.titleMedium),
+        backgroundColor: colorScheme.background,
+        foregroundColor: colorScheme.primary,
+        elevation: 0,
       ),
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               "Enter your email and password to confirm account deletion.",
-              style: TextStyle(color: Colors.white70),
+              style: textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onBackground.withOpacity(0.7),
+              ),
             ),
             const SizedBox(height: 20),
             TextField(
               controller: _emailController,
-              style: const TextStyle(color: Colors.white),
-              decoration: _inputDecoration("Email"),
+              style: TextStyle(color: colorScheme.onBackground),
+              decoration: _inputDecoration(context, "Email"),
             ),
             const SizedBox(height: 16),
             TextField(
               controller: _passwordController,
               obscureText: true,
-              style: const TextStyle(color: Colors.white),
-              decoration: _inputDecoration("Password"),
+              style: TextStyle(color: colorScheme.onBackground),
+              decoration: _inputDecoration(context, "Password"),
             ),
             const SizedBox(height: 32),
             _loading
@@ -114,12 +117,17 @@ class _DeleteAccountScreenState extends State<DeleteAccountScreen> {
     );
   }
 
-  InputDecoration _inputDecoration(String hint) {
+  InputDecoration _inputDecoration(BuildContext context, String hint) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     return InputDecoration(
       hintText: hint,
-      hintStyle: const TextStyle(color: Colors.grey),
+      hintStyle: textTheme.bodyMedium?.copyWith(
+        color: colorScheme.onSurface.withOpacity(0.5),
+      ),
       filled: true,
-      fillColor: Colors.grey[850],
+      fillColor: colorScheme.surface,
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(10),
         borderSide: BorderSide.none,

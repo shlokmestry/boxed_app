@@ -30,7 +30,8 @@ class SettingsScreen extends StatelessWidget {
             context,
             "Edit Profile",
             onTap: () {
-              Navigator.push(context,
+              Navigator.push(
+                  context,
                   MaterialPageRoute(builder: (_) => const EditProfileScreen()));
             },
           ),
@@ -38,7 +39,8 @@ class SettingsScreen extends StatelessWidget {
             context,
             "Delete Account",
             onTap: () {
-              Navigator.push(context,
+              Navigator.push(
+                  context,
                   MaterialPageRoute(builder: (_) => const DeleteAccountScreen()));
             },
           ),
@@ -50,11 +52,11 @@ class SettingsScreen extends StatelessWidget {
             onTap: () {
               showModalBottomSheet(
                 context: context,
-                builder: (_) => const ThemePickerSheet(),
                 backgroundColor: colorScheme.background,
                 shape: const RoundedRectangleBorder(
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
-                ),
+                    borderRadius:
+                        BorderRadius.vertical(top: Radius.circular(16))),
+                builder: (_) => const ThemePickerSheet(),
               );
             },
           ),
@@ -70,7 +72,7 @@ class SettingsScreen extends StatelessWidget {
                     "Permission settings coming soon",
                     style: TextStyle(color: colorScheme.onBackground),
                   ),
-                  backgroundColor: colorScheme.background,
+                  backgroundColor: colorScheme.surface,
                   behavior: SnackBarBehavior.floating,
                 ),
               );
@@ -96,9 +98,11 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildOption(BuildContext context, String label, {VoidCallback? onTap}) {
+  Widget _buildOption(BuildContext context, String label,
+      {VoidCallback? onTap}) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+
     return ListTile(
       title: Text(
         label,

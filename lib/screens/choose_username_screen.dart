@@ -2,6 +2,7 @@ import 'dart:math';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
 import 'home_screen.dart';
 
 class ChooseUsernameScreen extends StatefulWidget {
@@ -47,7 +48,6 @@ class _ChooseUsernameScreenState extends State<ChooseUsernameScreen> {
 
     final trimmed = username.trim();
 
-    // Check length
     if (trimmed.length < 4) {
       setState(() {
         _checking = false;
@@ -108,35 +108,43 @@ class _ChooseUsernameScreenState extends State<ChooseUsernameScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: colorScheme.background,
       appBar: AppBar(
-        backgroundColor: Colors.black,
-        title: const Text("Pick Your Username"),
+        backgroundColor: colorScheme.background,
+        elevation: 0,
+        title: Text("Pick Your Username",
+            style: textTheme.titleLarge?.copyWith(color: colorScheme.primary)),
+        iconTheme: IconThemeData(color: colorScheme.primary),
       ),
       body: Padding(
         padding: const EdgeInsets.all(24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
+            Text(
               "Choose a unique username to mark your memories.",
-              style: TextStyle(color: Colors.white70, fontSize: 16),
+              style: textTheme.bodyMedium?.copyWith(
+                color: colorScheme.onBackground.withOpacity(0.7),
+              ),
             ),
             const SizedBox(height: 20),
             TextField(
               controller: _controller,
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(color: colorScheme.onBackground),
               onChanged: _checkAvailability,
               decoration: InputDecoration(
                 hintText: "your_awesome_name",
                 filled: true,
-                fillColor: Colors.grey[850],
+                fillColor: colorScheme.surface,
+                hintStyle: TextStyle(color: colorScheme.onSurface.withOpacity(0.6)),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                   borderSide: BorderSide.none,
                 ),
-                hintStyle: const TextStyle(color: Colors.grey),
                 suffixIcon: _checking
                     ? const Padding(
                         padding: EdgeInsets.all(12),
@@ -155,9 +163,8 @@ class _ChooseUsernameScreenState extends State<ChooseUsernameScreen> {
             if (_feedback != null)
               Text(
                 _feedback!,
-                style: TextStyle(
+                style: textTheme.bodySmall?.copyWith(
                   color: _isAvailable ? Colors.green : Colors.redAccent,
-               
                 ),
               ),
             const SizedBox(height: 20),
@@ -165,16 +172,20 @@ class _ChooseUsernameScreenState extends State<ChooseUsernameScreen> {
               children: [
                 TextButton(
                   onPressed: _suggestUsername,
-                  child: const Text("Suggest New",
-                      style: TextStyle(color: Colors.white70)),
+                  child: Text("Suggest New",
+                      style: TextStyle(color: colorScheme.primary)),
                 ),
                 const Spacer(),
                 ElevatedButton(
                   onPressed: _isAvailable ? _confirmUsername : null,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: _isAvailable ? Colors.blue : Colors.grey,
+                    backgroundColor:
+                        _isAvailable ? colorScheme.primary : Colors.grey,
                     padding: const EdgeInsets.symmetric(
                         horizontal: 32, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                   child: const Text("Next"),
                 )

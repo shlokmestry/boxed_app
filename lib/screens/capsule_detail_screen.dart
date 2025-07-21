@@ -21,10 +21,12 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
   String? _capsuleTitle;
   String? _capsuleDescription;
   String? _aesKey;
-  int? _backgroundId; // ✅ nullable now
+  int? _backgroundId;
   Timer? _timer;
   Duration _remaining = Duration.zero;
   bool _showContent = false;
+  bool _isUnlocked = false;
+  bool _loading = true;
 
   final List<String> _backgroundImages = [
     'assets/basic_background1.jpg',
@@ -51,19 +53,22 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
     final title = data['name'];
     final description = data['description'];
     final key = data['aesKey'];
-    final bgId = data['backgroundId']; // now nullable
+    final bgId = data['backgroundId'];
 
     if (ts != null) {
       final date = (ts as Timestamp).toDate();
       final now = DateTime.now();
       final unlocked = now.isAfter(date);
+
       setState(() {
         _unlockDate = date;
         _capsuleTitle = title;
         _capsuleDescription = description;
         _aesKey = key;
-        _backgroundId = bgId; // Can be null
+        _backgroundId = bgId;
         _remaining = date.difference(DateTime.now());
+        _isUnlocked = unlocked;
+        _loading = false;
       });
 
       _timer?.cancel();
@@ -118,14 +123,21 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
     if (_loading) {
       return Scaffold(
         backgroundColor: colorScheme.background,
-        body: Center(child: CircularProgressIndicator(color: colorScheme.primary)),
+        body: Center(
+          child: CircularProgressIndicator(
+            color: colorScheme.primary,
+          ),
+        ),
       );
     }
-    return _isUnlocked ? _buildUnlockedView(colorScheme) : _buildLockedView(colorScheme);
+    return _isUnlocked ? _buildUnlockedView() : _buildLockedView();
   }
 
-  Widget _buildLockedView(ColorScheme colorScheme) {
-    final textTheme = Theme.of(context).textTheme;
+  Widget _buildLockedView() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
+
     return Scaffold(
       backgroundColor: colorScheme.background,
       body: Center(
@@ -135,37 +147,42 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              const Icon(Icons.lock, size: 64, color: Colors.white),
+              Icon(Icons.lock, size: 64, color: colorScheme.primary),
               const SizedBox(height: 24),
               Text(
                 "You're a bit early!",
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                    ),
+                style: textTheme.headlineSmall?.copyWith(
+                  color: colorScheme.onBackground,
+                  fontWeight: FontWeight.bold,
+                ),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 10),
               if (_capsuleTitle != null)
                 Text(
                   _capsuleTitle!,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: Colors.white70,
-                      ),
+                  style: textTheme.titleMedium?.copyWith(
+                    color: colorScheme.onBackground.withOpacity(0.6),
+                  ),
                   textAlign: TextAlign.center,
                 ),
               const SizedBox(height: 10),
               if (_unlockDate != null)
                 Text(
                   'Unlocks on: ${DateFormat.yMMMd().add_jm().format(_unlockDate!)}',
-                  style: const TextStyle(color: Colors.white70),
+                  style: TextStyle(
+                    color: colorScheme.onBackground.withOpacity(0.6),
+                  ),
                   textAlign: TextAlign.center,
                 ),
               const SizedBox(height: 18),
               if (_unlockDate != null)
                 Text(
                   '⏳ ${_formatDuration(_remaining)}',
-                  style: const TextStyle(color: Colors.blueAccent, fontSize: 18),
+                  style: TextStyle(
+                    color: colorScheme.primary,
+                    fontSize: 18,
+                  ),
                   textAlign: TextAlign.center,
                 ),
               const SizedBox(height: 36),
@@ -174,7 +191,7 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
                 child: ElevatedButton(
                   onPressed: () => Navigator.pop(context),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blueAccent,
+                    backgroundColor: colorScheme.primary,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -191,6 +208,10 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
   }
 
   Widget _buildUnlockedView() {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+    final textTheme = theme.textTheme;
+
     final String? backgroundAsset = (_backgroundId != null &&
             _backgroundId! >= 0 &&
             _backgroundId! < _backgroundImages.length)
@@ -199,16 +220,17 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
 
     return Scaffold(
       extendBodyBehindAppBar: true,
-      backgroundColor: Colors.black,
+      backgroundColor: colorScheme.background,
       appBar: AppBar(
         title: Text(
           _capsuleTitle ?? 'Capsule',
-          style: const TextStyle(color: Colors.white),
+          style: textTheme.titleMedium?.copyWith(
+            color: colorScheme.onBackground,
+          ),
         ),
-        backgroundColor: Colors.transparent,
+        backgroundColor: colorScheme.background,
         elevation: 0,
         centerTitle: true,
-        backgroundColor: Colors.black,
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
@@ -221,7 +243,7 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
               child: Center(
                 child: Column(
                   children: const [
-                    Icon(Icons.inventory_2, size: 64, color: Colors.white),
+                    Icon(Icons.inventory_2, size: 64),
                     SizedBox(height: 12),
                   ],
                 ),
@@ -240,17 +262,18 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
                     if (_capsuleTitle != null)
                       Text(
                         _capsuleTitle!,
-                        style: const TextStyle(
-                          fontSize: 28,
+                        style: textTheme.headlineSmall?.copyWith(
+                          color: colorScheme.onBackground,
                           fontWeight: FontWeight.bold,
-                          color: Colors.white,
                         ),
                       ),
                     const SizedBox(height: 12),
                     if (_capsuleDescription != null)
                       Text(
                         _capsuleDescription!,
-                        style: const TextStyle(color: Colors.grey, fontSize: 16),
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onBackground.withOpacity(0.6),
+                        ),
                       ),
                     const SizedBox(height: 20),
                     StreamBuilder<QuerySnapshot>(
@@ -262,60 +285,65 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
                           .snapshots(),
                       builder: (context, snapshot) {
                         if (snapshot.connectionState == ConnectionState.waiting) {
-                          return const Center(child: CircularProgressIndicator());
+                          return const Center(
+                            child: CircularProgressIndicator(),
+                          );
                         }
 
-                              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                                return const Center(
-                                  child: Text("No memories yet.",
-                                      style: TextStyle(color: Colors.white70)),
-                                );
-                              }
-
-                              final memories = snapshot.data!.docs;
-
-                              return Column(
-                                children: memories.map((doc) {
-                                  final memory = doc.data() as Map<String, dynamic>;
-                                  final type = memory['type'];
-
-                                  if (type == 'note') {
-                                    return _buildNoteMemory(memory);
-                                  } else if (type == 'image') {
-                                    return _buildImageMemory(memory);
-                                  } else {
-                                    return const SizedBox.shrink();
-                                  }
-                                }).toList(),
-                              );
-                            },
-                          ),
-                          const SizedBox(height: 24),
-                          if (_unlockDate != null)
-                            Text(
-                              'Unlocked on: ${DateFormat.yMMMd().add_jm().format(_unlockDate!)}',
-                              style: const TextStyle(color: Colors.white54, fontSize: 14),
+                        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                          return Text(
+                            "No memories yet.",
+                            style: textTheme.bodyMedium?.copyWith(
+                              color: colorScheme.onSurface.withOpacity(0.5),
                             ),
-                        ],
-                      ),
+                          );
+                        }
+
+                        final memories = snapshot.data!.docs;
+
+                        return Column(
+                          children: memories.map((doc) {
+                            final memory = doc.data() as Map<String, dynamic>;
+                            final type = memory['type'];
+
+                            if (type == 'note') {
+                              return _buildNoteMemory(memory);
+                            } else if (type == 'image') {
+                              return _buildImageMemory(memory);
+                            } else {
+                              return const SizedBox.shrink();
+                            }
+                          }).toList(),
+                        );
+                      },
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 24),
+                    if (_unlockDate != null)
+                      Text(
+                        'Unlocked on: ${DateFormat.yMMMd().add_jm().format(_unlockDate!)}',
+                        style: textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onBackground.withOpacity(0.6),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildNoteMemory(Map<String, dynamic> memory) {
+    final color = Theme.of(context).colorScheme.onBackground;
     String displayedText = '';
 
     if (memory.containsKey('encryptedText') && _aesKey != null) {
       try {
-        displayedText = CapsuleEncryption.decryptMemory(memory['encryptedText'], _aesKey!);
-      } catch (e) {
+        displayedText =
+            CapsuleEncryption.decryptMemory(memory['encryptedText'], _aesKey!);
+      } catch (_) {
         displayedText = '[Error decrypting note]';
       }
     } else if (memory.containsKey('text')) {
@@ -327,13 +355,13 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
       child: Container(
         width: double.infinity,
         decoration: BoxDecoration(
-          color: Colors.black.withOpacity(0.6),
+          color: Theme.of(context).colorScheme.surface,
           borderRadius: BorderRadius.circular(12),
         ),
         padding: const EdgeInsets.all(16),
         child: Text(
           displayedText,
-          style: const TextStyle(fontSize: 16, color: Colors.white),
+          style: TextStyle(fontSize: 16, color: color),
         ),
       ),
     );

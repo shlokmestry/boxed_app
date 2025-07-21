@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'login_signup.dart'; // make sure this path is correct
+import 'login_signup.dart';
 
 class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
@@ -53,11 +53,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: colorScheme.background,
       body: SafeArea(
         child: Column(
           children: [
+            // Onboarding Pages
             Expanded(
               child: PageView.builder(
                 controller: _controller,
@@ -73,11 +77,11 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                       children: [
                         Container(
                           decoration: BoxDecoration(
-                            color: Colors.grey[900],
+                            color: colorScheme.surface,
                             borderRadius: BorderRadius.circular(24),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.25),
+                                color: colorScheme.shadow.withOpacity(0.1),
                                 blurRadius: 16,
                                 offset: const Offset(0, 8),
                               ),
@@ -93,19 +97,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         const SizedBox(height: 36),
                         Text(
                           page.title,
-                          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                              ),
+                          style: textTheme.headlineSmall?.copyWith(
+                            color: colorScheme.onBackground,
+                            fontWeight: FontWeight.bold,
+                          ),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 18),
                         Text(
                           page.description,
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: Colors.white70,
-                                height: 1.5,
-                              ),
+                          style: textTheme.bodyMedium?.copyWith(
+                            color: colorScheme.onBackground.withOpacity(0.7),
+                            height: 1.5,
+                          ),
                           textAlign: TextAlign.center,
                         ),
                       ],
@@ -114,10 +118,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 },
               ),
             ),
+
+            // Button + Page Indicator
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 20),
               child: Column(
                 children: [
+                  // CTA Button
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
@@ -128,7 +135,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                                 curve: Curves.easeInOut,
                               ),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueAccent,
+                        backgroundColor: colorScheme.primary,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -138,24 +145,29 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         _currentPage == _pages.length - 1
                             ? "Get Started"
                             : "Next",
-                        style: const TextStyle(fontSize: 16),
+                        style: textTheme.labelLarge?.copyWith(
+                          color: colorScheme.onPrimary,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(height: 14),
+
+                  // Page Indicator Dots
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: List.generate(
                       _pages.length,
                       (index) => AnimatedContainer(
-                        duration: const Duration(milliseconds: 200),
+                        duration: const Duration(milliseconds: 250),
                         margin: const EdgeInsets.symmetric(horizontal: 4),
                         width: _currentPage == index ? 12 : 7,
                         height: 7,
                         decoration: BoxDecoration(
                           color: _currentPage == index
-                              ? Colors.white
-                              : Colors.white30,
+                              ? colorScheme.primary
+                              : colorScheme.onSurface.withOpacity(0.3),
                           borderRadius: BorderRadius.circular(4),
                         ),
                       ),

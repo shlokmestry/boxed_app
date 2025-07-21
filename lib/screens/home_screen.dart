@@ -1,11 +1,12 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:boxed_app/screens/create_capsule_screen.dart';
-import 'package:boxed_app/screens/capsule_detail_screen.dart';
-import 'package:boxed_app/screens/profile_screen.dart';
 import 'package:intl/intl.dart';
-import 'package:boxed_app/screens/settings_screen.dart';
+
+import 'capsule_detail_screen.dart';
+import 'create_capsule_screen.dart';
+import 'profile_screen.dart';
+import 'settings_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -30,115 +31,13 @@ class _HomeScreenState extends State<HomeScreen> {
             fontWeight: FontWeight.bold,
           ),
         ),
-        backgroundColor: colorScheme.background,
         centerTitle: true,
-        iconTheme: IconThemeData(color: colorScheme.primary),
         elevation: 0,
-      ),
-      drawer: Drawer(
         backgroundColor: colorScheme.background,
-        child: SafeArea(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(20),
-                child: Text(
-                  'Boxed',
-                  style: textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.primary,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              _DrawerButton(
-                icon: Icons.folder_special,
-                label: 'My Capsules',
-                onTap: () => Navigator.pop(context),
-              ),
-              _DrawerButton(
-                icon: Icons.person,
-                label: 'My Profile',
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                  );
-                },
-              ),
-              _DrawerButton(
-                icon: Icons.mail_outline,
-                label: 'Invites',
-                onTap: () {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: const Text("Invites coming soon"),
-                      backgroundColor: colorScheme.surface,
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                },
-              ),
-              _DrawerButton(
-                icon: Icons.group,
-                label: 'Shared With Me',
-                onTap: () {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: const Text("Shared Capsules coming soon"),
-                      backgroundColor: colorScheme.surface,
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                },
-              ),
-              _DrawerButton(
-                icon: Icons.color_lens_outlined,
-                label: 'Themes',
-                onTap: () {
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: const Text("Themes feature coming soon"),
-                      backgroundColor: colorScheme.surface,
-                      behavior: SnackBarBehavior.floating,
-                    ),
-                  );
-                },
-              ),
-              _DrawerButton(
-                icon: Icons.settings,
-                label: 'Settings',
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                  );
-                },
-              ),
-              const Spacer(),
-              _DrawerButton(
-                icon: Icons.logout,
-                label: 'Sign Out',
-                iconColor: Colors.redAccent,
-                textColor: Colors.redAccent,
-                onTap: () async {
-                  Navigator.pop(context);
-                  await FirebaseAuth.instance.signOut();
-                },
-              ),
-              const SizedBox(height: 20),
-            ],
-          ),
-        ),
+        iconTheme: IconThemeData(color: colorScheme.primary),
       ),
       backgroundColor: colorScheme.background,
+      drawer: _buildDrawer(context),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           Navigator.push(
@@ -150,10 +49,10 @@ class _HomeScreenState extends State<HomeScreen> {
         child: Icon(Icons.add, color: colorScheme.onPrimary),
       ),
       body: user == null
-          ? const Center(
+          ? Center(
               child: Text(
                 "Please sign in to view capsules",
-                style: TextStyle(color: Colors.white),
+                style: textTheme.bodyLarge?.copyWith(color: colorScheme.onBackground),
               ),
             )
           : StreamBuilder<QuerySnapshot>(
@@ -169,10 +68,12 @@ class _HomeScreenState extends State<HomeScreen> {
                 final docs = snapshot.data!.docs;
 
                 if (docs.isEmpty) {
-                  return const Center(
+                  return Center(
                     child: Text(
                       "No capsules found.",
-                      style: TextStyle(color: Colors.white),
+                      style: textTheme.bodyLarge?.copyWith(
+                        color: colorScheme.onBackground.withOpacity(0.7),
+                      ),
                     ),
                   );
                 }
@@ -183,7 +84,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   itemBuilder: (context, index) {
                     final data = docs[index].data() as Map<String, dynamic>;
                     final title = data['name'] ?? '';
-                    final emoji = data['emoji'] ?? '';
+                    final emoji = data['emoji'] ?? '📦';
                     final unlockDate = (data['unlockDate'] as Timestamp).toDate();
                     final isUnlocked = DateTime.now().isAfter(unlockDate);
 
@@ -207,6 +108,108 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               },
             ),
+    );
+  }
+
+  Drawer _buildDrawer(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    return Drawer(
+      backgroundColor: colorScheme.background,
+      child: SafeArea(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(20),
+              child: Text(
+                'Boxed',
+                style: textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: colorScheme.primary,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            _DrawerButton(
+              icon: Icons.folder_special,
+              label: 'My Capsules',
+              onTap: () => Navigator.pop(context),
+            ),
+            _DrawerButton(
+              icon: Icons.person,
+              label: 'My Profile',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                );
+              },
+            ),
+            _DrawerButton(
+              icon: Icons.mail_outline,
+              label: 'Invites',
+              onTap: () {
+                Navigator.pop(context);
+                _showSnack(context, "Invites coming soon");
+              },
+            ),
+            _DrawerButton(
+              icon: Icons.group,
+              label: 'Shared With Me',
+              onTap: () {
+                Navigator.pop(context);
+                _showSnack(context, "Shared Capsules coming soon");
+              },
+            ),
+            _DrawerButton(
+              icon: Icons.color_lens_outlined,
+              label: 'Themes',
+              onTap: () {
+                Navigator.pop(context);
+                _showSnack(context, "Themes feature coming soon");
+              },
+            ),
+            _DrawerButton(
+              icon: Icons.settings,
+              label: 'Settings',
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                );
+              },
+            ),
+            const Spacer(),
+            _DrawerButton(
+              icon: Icons.logout,
+              label: 'Sign Out',
+              iconColor: Colors.redAccent,
+              textColor: Colors.redAccent,
+              onTap: () async {
+                Navigator.pop(context);
+                await FirebaseAuth.instance.signOut();
+              },
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showSnack(BuildContext context, String message) {
+    final colorScheme = Theme.of(context).colorScheme;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: colorScheme.surface,
+        behavior: SnackBarBehavior.floating,
+      ),
     );
   }
 }
@@ -270,9 +273,12 @@ class CapsuleCard extends StatelessWidget {
                   ],
                 ),
               ),
-              isUnlocked
-                  ? Icon(Icons.lock_open_rounded, color: Colors.greenAccent)
-                  : Icon(Icons.lock_outline, color: colorScheme.onSurface.withOpacity(0.6)),
+              Icon(
+                isUnlocked ? Icons.lock_open_rounded : Icons.lock_outline,
+                color: isUnlocked
+                    ? Colors.greenAccent
+                    : colorScheme.onSurface.withOpacity(0.6),
+              ),
             ],
           ),
         ),

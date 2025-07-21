@@ -1,14 +1,10 @@
 import 'package:boxed_app/widgets/buttons.dart';
-import 'package:boxed_app/services/encryption_service.dart';
+import 'package:boxed_app/screens/choose_username_screen.dart';
 import 'package:flutter/material.dart';
 import 'home_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'dart:io';
-import 'package:google_sign_in/google_sign_in.dart';
-import 'package:sign_in_with_apple/sign_in_with_apple.dart';
-
 
 class LoginSignup extends StatefulWidget {
   const LoginSignup({super.key});
@@ -35,13 +31,7 @@ class _LoginSignupState extends State<LoginSignup> {
   }
 
   void _requestNotificationPermission() async {
-    NotificationSettings settings =
-        await FirebaseMessaging.instance.requestPermission(
-      alert: true,
-      badge: true,
-      sound: true,
-    );
-    print('Notification permission: ${settings.authorizationStatus}');
+    await FirebaseMessaging.instance.requestPermission();
   }
 
   void _logFcmToken() async {
@@ -56,102 +46,16 @@ class _LoginSignupState extends State<LoginSignup> {
     });
   }
 
-  Future<void> _signInWithGoogle() async {
-  try {
-    final googleUser = await GoogleSignIn().signIn();
-    if (googleUser == null) return;
-
-    final googleAuth = await googleUser.authentication;
-    final credential = GoogleAuthProvider.credential(
-      accessToken: googleAuth.accessToken,
-      idToken: googleAuth.idToken,
-    );
-
-    final userCred = await FirebaseAuth.instance.signInWithCredential(credential);
-    final user = userCred.user;
-
-    if (user != null) {
-      final docRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
-      final doc = await docRef.get();
-
-      if (!doc.exists) {
-        final now = Timestamp.now();
-        await docRef.set({
-          'firstName': user.displayName?.split(' ').first ?? '',
-          'lastName': user.displayName?.split(' ').last ?? '',
-          'username': user.email?.split('@').first ?? '',
-          'email': user.email,
-          'photoUrl': user.photoURL,
-          'bio': '',
-          'createdAt': now,
-          'darkMode': false,
-        });
-      }
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
-    }
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Google sign-in failed: $e')),
-    );
-  }
-}
-
-
-Future<void> _signInWithApple() async {
-  try {
-    final appleCredential = await SignInWithApple.getAppleIDCredential(
-      scopes: [AppleIDAuthorizationScopes.email, AppleIDAuthorizationScopes.fullName],
-    );
-
-    final oauthCredential = OAuthProvider("apple.com").credential(
-      idToken: appleCredential.identityToken,
-      accessToken: appleCredential.authorizationCode,
-    );
-
-    final userCred = await FirebaseAuth.instance.signInWithCredential(oauthCredential);
-    final user = userCred.user;
-
-    if (user != null) {
-      final docRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
-      final doc = await docRef.get();
-
-      if (!doc.exists) {
-        final now = Timestamp.now();
-        await docRef.set({
-          'firstName': appleCredential.givenName ?? '',
-          'lastName': appleCredential.familyName ?? '',
-          'username': user.email?.split('@').first ?? 'apple_user',
-          'email': user.email,
-          'photoUrl': null,
-          'bio': '',
-          'createdAt': now,
-          'darkMode': false,
-        });
-      }
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
-      );
-    }
-  } catch (e) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('Apple sign-in failed: $e')),
-    );
-  }
-}
-
-
-
+  String _capitalize(String input) =>
+      input.isEmpty ? '' : input[0].toUpperCase() + input.substring(1);
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: colorScheme.background,
       body: Center(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -159,13 +63,12 @@ Future<void> _signInWithApple() async {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Center(
+              Center(
                 child: Text(
                   'Welcome to Boxed',
-                  style: TextStyle(
-                    fontSize: 30,
+                  style: textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.bold,
-                    color: Colors.white,
+                    color: colorScheme.primary,
                   ),
                 ),
               ),
@@ -173,275 +76,76 @@ Future<void> _signInWithApple() async {
               Center(
                 child: Text(
                   'Your memories, waiting patiently.',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w300,
-                    color: Colors.grey,
+                  style: textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onBackground.withOpacity(0.6),
                   ),
                 ),
               ),
               const SizedBox(height: 25),
+
+              /// Email Field
               TextField(
                 controller: emailController,
                 onChanged: (_) {
-                  if (emailError != null) {
-                    setState(() => emailError = null);
-                  }
+                  if (emailError != null) setState(() => emailError = null);
                 },
                 decoration: InputDecoration(
-                  border: const OutlineInputBorder(),
                   hintText: 'Email',
-                  hintStyle: const TextStyle(color: Colors.white70),
                   errorText: emailError,
-                  enabledBorder: OutlineInputBorder(
+                  hintStyle: TextStyle(color: colorScheme.onSurface.withOpacity(0.6)),
+                  filled: true,
+                  fillColor: colorScheme.surface,
+                  border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Colors.white),
+                    borderSide: BorderSide.none,
                   ),
                 ),
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: colorScheme.onBackground),
               ),
               const SizedBox(height: 10),
+
+              /// Password Field
               TextField(
                 controller: passwordController,
                 obscureText: obscurePassword,
                 onChanged: (_) {
-                  if (passwordError != null) {
-                    setState(() => passwordError = null);
-                  }
+                  if (passwordError != null) setState(() => passwordError = null);
                 },
                 decoration: InputDecoration(
-                  border: const OutlineInputBorder(),
                   hintText: 'Password',
-                  hintStyle: const TextStyle(color: Colors.white70),
                   errorText: passwordError,
+                  hintStyle: TextStyle(color: colorScheme.onSurface.withOpacity(0.6)),
+                  filled: true,
+                  fillColor: colorScheme.surface,
                   suffixIcon: IconButton(
-                    onPressed: () {
-                      setState(() {
-                        obscurePassword = !obscurePassword;
-                      });
-                    },
+                    onPressed: () => setState(() => obscurePassword = !obscurePassword),
                     icon: Icon(
-                      obscurePassword
-                          ? Icons.visibility_off
-                          : Icons.visibility,
-                      color: Colors.white,
+                      obscurePassword ? Icons.visibility_off : Icons.visibility,
+                      color: colorScheme.onSurface,
                     ),
                   ),
-                  enabledBorder: OutlineInputBorder(
+                  border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
-                    borderSide: const BorderSide(color: Colors.white),
+                    borderSide: BorderSide.none,
                   ),
                 ),
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: colorScheme.onBackground),
               ),
               const SizedBox(height: 20),
+
+              /// Auth Button
               Buttons(
                 label: isLogin ? 'Log In' : 'Sign Up',
-                onPressed: () async {
-                  final email = emailController.text.trim().toLowerCase();
-                  final password = passwordController.text.trim();
-
-                  if (email.isEmpty || password.isEmpty) {
-                    _showFieldErrors(
-                      emailMsg:
-                          email.isEmpty ? 'Please enter your email.' : null,
-                      passwordMsg:
-                          password.isEmpty ? 'Please enter your password.' : null,
-                    );
-                    return;
-                  }
-
-                  try {
-                    if (isLogin) {
-                      final credential = await FirebaseAuth.instance
-                          .signInWithEmailAndPassword(
-                        email: email,
-                        password: password,
-                      );
-
-                      final user = credential.user;
-                      if (user != null) {
-                        final userDoc = FirebaseFirestore.instance.collection('users').doc(user.uid);
-                        final snapshot = await userDoc.get();
-
-                        if (!snapshot.exists) {
-                          final now = Timestamp.now();
-                          final username = user.email!.split('@')[0];
-                          await userDoc.set({
-                            'username': username,
-                            'email': user.email,
-                            'createdAt': now,
-                            'displayName': _capitalize(username),
-                            'bio': '',
-                            'photoUrl': null,
-                            'darkMode': false,
-                          });
-                        }
-
-                        await userDoc.set({
-                          'lastLogin': Timestamp.now(),
-                        }, SetOptions(merge: true));
-                      }
-
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(builder: (_) => const HomeScreen()),
-                      );
-                    } else {
-                      final credential = await FirebaseAuth.instance
-                          .createUserWithEmailAndPassword(
-                        email: email,
-                        password: password,
-                      );
-
-                      final user = credential.user;
-
-                      if (user != null) {
-                        final now = Timestamp.now();
-                        final username = user.email!.split('@')[0];
-                        String displayName = '';
-                        String firstName = '';
-                        String lastName = '';
-                        if (username.contains('.')) {
-                          final parts = username.split('.');
-                          firstName = parts[0];
-                          lastName = parts.length > 1 ? parts[1] : '';
-                          displayName = '${_capitalize(firstName)} ${_capitalize(lastName)}';
-                        } else {
-                          firstName = username;
-                          displayName = _capitalize(username);
-                        }
-                        await FirebaseFirestore.instance
-                            .collection('users')
-                            .doc(user.uid)
-                            .set({
-                          'firstName': _capitalize(firstName),
-                          'lastName': _capitalize(lastName),
-                          'displayName': displayName,
-                          'email': user.email,
-                          'email_lowercase': user.email!.toLowerCase(),
-                          'photoUrl': null,
-                          'bio': '',
-                          'createdAt': now,
-                          'darkMode': false,
-                        }, SetOptions(merge: true));
-                      }
-                    }
-
-                    // ✅ Last login timestamp
-                    final currentUser = FirebaseAuth.instance.currentUser;
-                    if (currentUser != null) {
-                      await FirebaseFirestore.instance
-                          .collection('users')
-                          .doc(currentUser.uid)
-                          .set({
-                        'lastLogin': Timestamp.now(),
-                      }, SetOptions(merge: true));
-                    }
-
-                    // ✅ Navigate to home
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(builder: (_) => const HomeScreen()),
-                    );
-                  } on FirebaseAuthException catch (e) {
-                    String message;
-                    switch (e.code) {
-                      case 'user-not-found':
-                        message =
-                            'This email’s a stranger to us. Want to sign up instead?';
-                        break;
-                      case 'wrong-password':
-                      case 'invalid-credential':
-                        message =
-                            'That password wasn’t quite right — give it another shot';
-                        break;
-                      case 'invalid-email':
-                        message =
-                            'We love creativity, but that’s not a valid email';
-                        break;
-                      case 'email-already-in-use':
-                        message =
-                            'Looks like you’ve already joined the Boxed club. Welcome back?';
-                        break;
-                      case 'weak-password':
-                        message =
-                            'Your password needs a protein shake — at least 6 characters';
-                        break;
-                      default:
-                        message = 'Authentication error: ${e.message}';
-                    }
-
-                    if (e.code == 'wrong-password' ||
-                        e.code == 'invalid-credential') {
-                      _showFieldErrors(passwordMsg: message);
-                    } else if (e.code == 'user-not-found' ||
-                        e.code == 'invalid-email' ||
-                        e.code == 'email-already-in-use') {
-                      _showFieldErrors(emailMsg: message);
-                    } else {
-                      _showFieldErrors(emailMsg: message);
-                    }
-                  } catch (e) {
-                    _showFieldErrors(
-                      emailMsg: 'An unexpected error occurred. Please try again.',
-                    );
-                  }
-                },
+                onPressed: _handleAuth,
               ),
-
-              const SizedBox(height: 20),
-Row(children: <Widget>[
-  Expanded(child: Divider(color: Colors.grey)),
-  const Padding(
-    padding: EdgeInsets.symmetric(horizontal: 8),
-    child: Text('or', style: TextStyle(color: Colors.grey)),
-  ),
-  Expanded(child: Divider(color: Colors.grey)),
-]),
-const SizedBox(height: 16),
-
-if (Platform.isIOS)
-  Column(
-    children: [
-      SizedBox(
-  width: double.infinity,
-  height: 50,
-  child: OutlinedButton.icon(
-    onPressed: _signInWithApple,
-    icon: const Icon(Icons.apple, color: Colors.black),
-    label: const Text(
-      "Continue with Apple",
-      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-    ),
-    style: OutlinedButton.styleFrom(
-      backgroundColor: Colors.white,
-      foregroundColor: Colors.black,
-      side: const BorderSide(color: Colors.transparent),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
-      ),
-    ),
-  ),
-),
-
-      SizedBox(height: 10),
-      _googleButton(),
-    ],
-  )
-else
-  _googleButton(),
-
-              
               const SizedBox(height: 10),
+
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    isLogin
-                        ? "Don't have an account?"
-                        : "Already have an account?",
-                    style: const TextStyle(color: Colors.white),
+                    isLogin ? "Don't have an account?" : "Already have an account?",
+                    style: textTheme.bodyMedium?.copyWith(color: colorScheme.onBackground),
                   ),
                   GestureDetector(
                     onTap: () {
@@ -453,8 +157,8 @@ else
                     },
                     child: Text(
                       isLogin ? " Sign up" : " Log in",
-                      style: const TextStyle(
-                        color: Colors.white,
+                      style: TextStyle(
+                        color: colorScheme.primary,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -467,28 +171,125 @@ else
       ),
     );
   }
-Widget _googleButton() {
-  return SizedBox(
-    width: double.infinity, 
-    height: 50,             
-    child: OutlinedButton.icon(
-      onPressed: _signInWithGoogle,
-      icon: Image.asset('assets/google_icon.png', height: 24), 
-      label: const Text(
-        "Continue with Google",
-        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w500),
-      ),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: Colors.black,
-        backgroundColor: Colors.white,
-        side: const BorderSide(color: Colors.transparent),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8), 
-        ),
-      ),
-    ),
-  );
-}
 
+  Future<void> _handleAuth() async {
+    final email = emailController.text.trim().toLowerCase();
+    final password = passwordController.text.trim();
 
+    if (email.isEmpty || password.isEmpty) {
+      _showFieldErrors(
+        emailMsg: email.isEmpty ? 'Please enter your email.' : null,
+        passwordMsg: password.isEmpty ? 'Please enter your password.' : null,
+      );
+      return;
+    }
+
+    try {
+      if (isLogin) {
+        final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
+
+        final uid = credential.user!.uid;
+        final hasUsername = await _userHasUsername(uid);
+        _navigateAccordingToUsername(hasUsername);
+      } else {
+        final credential = await FirebaseAuth.instance
+            .createUserWithEmailAndPassword(email: email, password: password);
+        final user = credential.user;
+
+        if (user != null) {
+          final usernameBase = user.email!.split('@')[0];
+          String firstName = '';
+          String lastName = '';
+          String displayName;
+
+          if (usernameBase.contains('.')) {
+            final parts = usernameBase.split('.');
+            firstName = parts[0];
+            lastName = parts.length > 1 ? parts[1] : '';
+            displayName = '${_capitalize(firstName)} ${_capitalize(lastName)}';
+          } else {
+            firstName = usernameBase;
+            displayName = _capitalize(usernameBase);
+          }
+
+          await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+            'firstName': _capitalize(firstName),
+            'lastName': _capitalize(lastName),
+            'displayName': displayName,
+            'email': user.email,
+            'email_lowercase': email,
+            'photoUrl': null,
+            'bio': '',
+            'createdAt': Timestamp.now(),
+            'darkMode': false,
+          }, SetOptions(merge: true));
+
+          // Immediately direct all signups to ChooseUsernameScreen
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const ChooseUsernameScreen()),
+          );
+          return; // Stop further logic
+        }
+      }
+
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser != null) {
+        await FirebaseFirestore.instance.collection('users').doc(currentUser.uid).set(
+          {'lastLogin': Timestamp.now()},
+          SetOptions(merge: true),
+        );
+      }
+    } on FirebaseAuthException catch (e) {
+      String message;
+      switch (e.code) {
+        case 'user-not-found':
+          message = "This email’s a stranger to us. Want to sign up instead?";
+          break;
+        case 'wrong-password':
+        case 'invalid-credential':
+          message = "That password wasn’t quite right — give it another shot";
+          break;
+        case 'invalid-email':
+          message = "We love creativity, but that’s not a valid email";
+          break;
+        case 'email-already-in-use':
+          message = "You've already joined Boxed! Tap 'Log In' to enter the vault.";
+          break;
+        case 'weak-password':
+          message = "Make that password stronger (6+ characters)";
+          break;
+        default:
+          message = 'Authentication error: ${e.message}';
+      }
+
+      if (e.code == 'wrong-password' || e.code == 'invalid-credential') {
+        _showFieldErrors(passwordMsg: message);
+      } else {
+        _showFieldErrors(emailMsg: message);
+      }
+    } catch (e) {
+      _showFieldErrors(emailMsg: 'Unexpected error — please try again.');
+    }
+  }
+
+  Future<bool> _userHasUsername(String uid) async {
+    final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+    final data = doc.data();
+    final username = data?['username'];
+    return username != null && username.toString().trim().isNotEmpty;
+  }
+
+  Future<void> _navigateAccordingToUsername(bool hasUsername) async {
+    if (!mounted) return;
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (_) => hasUsername ? const HomeScreen() : const ChooseUsernameScreen(),
+      ),
+    );
+  }
 }

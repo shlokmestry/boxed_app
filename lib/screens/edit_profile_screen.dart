@@ -108,12 +108,17 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     return Scaffold(
+      backgroundColor: colorScheme.background,
       appBar: AppBar(
-        title: const Text("Edit Profile"),
-        backgroundColor: Colors.black,
+        title: Text("Edit Profile", style: textTheme.titleMedium),
+        backgroundColor: colorScheme.background,
+        foregroundColor: colorScheme.primary,
+        elevation: 0,
       ),
-      backgroundColor: Colors.black,
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : Padding(
@@ -132,16 +137,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 : (_photoUrl != null && _photoUrl!.isNotEmpty)
                                     ? NetworkImage(_photoUrl!) as ImageProvider
                                     : null,
-                            backgroundColor: Colors.grey[800],
-                            child: (_newImage == null && (_photoUrl == null || _photoUrl!.isEmpty))
-                                ? const Icon(Icons.person, color: Colors.white, size: 50)
+                            backgroundColor: colorScheme.surface,
+                            child: (_newImage == null &&
+                                    (_photoUrl == null || _photoUrl!.isEmpty))
+                                ? Icon(Icons.person,
+                                    color: colorScheme.onSurface, size: 50)
                                 : null,
                           ),
                           Positioned(
                             bottom: 0,
                             right: 0,
                             child: IconButton(
-                              icon: const Icon(Icons.edit, color: Colors.white),
+                              icon: Icon(Icons.edit, color: colorScheme.onSurface),
                               onPressed: _pickImage,
                             ),
                           ),
@@ -150,13 +157,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     ),
                     const SizedBox(height: 24),
                     if (_error != null) ...[
-                      Text(_error!, style: const TextStyle(color: Colors.red)),
+                      Text(_error!, style: TextStyle(color: colorScheme.error)),
                       const SizedBox(height: 8),
                     ],
                     TextFormField(
                       initialValue: _firstName ?? "",
-                      style: const TextStyle(color: Colors.white),
-                      decoration: _inputDecoration('First Name'),
+                      style: TextStyle(color: colorScheme.onBackground),
+                      decoration: _inputDecoration(context, 'First Name'),
                       validator: (value) =>
                           value == null || value.trim().isEmpty ? 'Required' : null,
                       onSaved: (value) => _firstName = value,
@@ -164,15 +171,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     const SizedBox(height: 12),
                     TextFormField(
                       initialValue: _lastName ?? "",
-                      style: const TextStyle(color: Colors.white),
-                      decoration: _inputDecoration('Last Name'),
+                      style: TextStyle(color: colorScheme.onBackground),
+                      decoration: _inputDecoration(context, 'Last Name'),
                       onSaved: (value) => _lastName = value,
                     ),
                     const SizedBox(height: 12),
                     TextFormField(
                       initialValue: _username ?? "",
-                      style: const TextStyle(color: Colors.white),
-                      decoration: _inputDecoration('Username'),
+                      style: TextStyle(color: colorScheme.onBackground),
+                      decoration: _inputDecoration(context, 'Username'),
                       validator: (value) =>
                           value == null || value.trim().isEmpty ? 'Required' : null,
                       onSaved: (value) => _username = value,
@@ -180,7 +187,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                     const SizedBox(height: 24),
                     ElevatedButton(
                       onPressed: _saveProfile,
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: colorScheme.primary,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
                       child: const Text("Save"),
                     ),
                   ],
@@ -190,14 +203,20 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     );
   }
 
-  InputDecoration _inputDecoration(String label) => InputDecoration(
-        labelText: label,
-        labelStyle: const TextStyle(color: Colors.grey),
-        filled: true,
-        fillColor: Colors.grey[850],
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
-        ),
-      );
+  InputDecoration _inputDecoration(BuildContext context, String label) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    return InputDecoration(
+      labelText: label,
+      labelStyle: textTheme.bodyMedium?.copyWith(
+        color: colorScheme.onSurface.withOpacity(0.7),
+      ),
+      filled: true,
+      fillColor: colorScheme.surface,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: BorderSide.none,
+      ),
+    );
+  }
 }

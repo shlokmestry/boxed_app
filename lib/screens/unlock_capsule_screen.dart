@@ -38,7 +38,6 @@ class _UnlockCapsuleScreenState extends State<UnlockCapsuleScreen> {
         return;
       }
 
-      // 🔒 STEP 1. Get capsule data
       final capsuleDoc = await FirebaseFirestore.instance
           .collection('capsules')
           .doc(capsuleId)
@@ -63,7 +62,6 @@ class _UnlockCapsuleScreenState extends State<UnlockCapsuleScreen> {
         return;
       }
 
-      // 🔐 STEP 2. Get private key from secure storage
       final privateKeyPem = await EncryptionService.getPrivateKey();
 
       if (privateKeyPem == null) {
@@ -74,13 +72,11 @@ class _UnlockCapsuleScreenState extends State<UnlockCapsuleScreen> {
         return;
       }
 
-      // 🧠 STEP 3. Decrypt AES key
       final aesKey = EncryptionService.decryptCapsuleKey(
         encryptedKeyBase64,
         privateKeyPem,
       );
 
-      // 📥 STEP 4. Fetch encrypted memories from subcollection
       final memorySnapshot = await FirebaseFirestore.instance
           .collection('capsules')
           .doc(capsuleId)
@@ -91,19 +87,17 @@ class _UnlockCapsuleScreenState extends State<UnlockCapsuleScreen> {
 
       for (final doc in memorySnapshot.docs) {
         final encryptedBase64 = doc.data()['encryptedBytes'];
-
         if (encryptedBase64 == null) continue;
 
-        final encryptedBytes = Uint8List.fromList(base64Decode(encryptedBase64));
-        final decryptedBytes = EncryptionService.decryptDataAES(
-          encryptedBytes,
-          Uint8List.fromList(aesKey),
-        );
-
         try {
+          final encryptedBytes = Uint8List.fromList(base64Decode(encryptedBase64));
+          final decryptedBytes = EncryptionService.decryptDataAES(
+            encryptedBytes,
+            Uint8List.fromList(aesKey),
+          );
           final result = utf8.decode(decryptedBytes);
           tempDecrypted.add(result);
-        } catch (e) {
+        } catch (_) {
           tempDecrypted.add('📁 [Binary/Media Memory]');
         }
       }
@@ -122,29 +116,47 @@ class _UnlockCapsuleScreenState extends State<UnlockCapsuleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: colorScheme.background,
       appBar: AppBar(
-        title: const Text('🕰️ Capsule Memories'),
-        backgroundColor: Colors.black,
+        title: Text("🕰️ Capsule Memories", style: textTheme.titleMedium),
+        foregroundColor: colorScheme.primary,
+        backgroundColor: colorScheme.background,
+        elevation: 0,
       ),
       body: loading
           ? const Center(child: CircularProgressIndicator())
           : error != null
               ? Center(
-                  child: Text(
-                    error!,
-                    style: const TextStyle(color: Colors.red, fontSize: 16),
-                    textAlign: TextAlign.center,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      error!,
+                      style: textTheme.bodyMedium?.copyWith(color: colorScheme.error),
+                      textAlign: TextAlign.center,
+                    ),
                   ),
                 )
               : ListView.builder(
+                  padding: const EdgeInsets.all(16),
                   itemCount: decryptedMemories.length,
-                  itemBuilder: (context, index) => ListTile(
-                    leading: const Icon(Icons.note, color: Colors.white),
-                    title: Text(
-                      decryptedMemories[index],
-                      style: const TextStyle(color: Colors.white),
+                  itemBuilder: (context, index) => Card(
+                    color: colorScheme.surface,
+                    margin: const EdgeInsets.only(bottom: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: ListTile(
+                      leading: Icon(Icons.note, color: colorScheme.primary),
+                      title: Text(
+                        decryptedMemories[index],
+                        style: textTheme.bodyLarge?.copyWith(
+                          color: colorScheme.onSurface,
+                        ),
+                      ),
                     ),
                   ),
                 ),

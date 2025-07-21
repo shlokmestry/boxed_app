@@ -19,13 +19,13 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
   final TextEditingController _descriptionController = TextEditingController();
   final TextEditingController _noteController = TextEditingController();
   final TextEditingController _collaboratorEmailController = TextEditingController();
+  final TextEditingController _collaboratorSearchController = TextEditingController();
 
-  DateTime? _selectedDate;
+  DateTime? _selectedDateTime;
   bool _isLoading = false;
   final List<File> _selectedImages = [];
   final ImagePicker _picker = ImagePicker();
 
-  // Use `null` for "No Background"
   int? _selectedBackground;
 
   final List<String> _backgroundOptions = [
@@ -33,6 +33,8 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     'assets/basic_background2.webp',
     'assets/basic_background3.jpg',
   ];
+
+  final List<Map<String, dynamic>> _collaborators = [];
 
   Future<void> _selectDate() async {
     final DateTime now = DateTime.now();
@@ -42,7 +44,6 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
       firstDate: now,
       lastDate: DateTime(now.year + 5),
       builder: (context, child) {
-        // Use app theme for date picker
         return Theme(
           data: Theme.of(context),
           child: child!,
@@ -98,6 +99,12 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
   }
 
   Future<void> _createCapsule() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    final List<String> memberIds = [
+      if (currentUser != null) currentUser.uid,
+      ..._collaborators.map((c) => c['uid'] as String),
+    ];
+
     if (_nameController.text.trim().isEmpty ||
         _descriptionController.text.trim().isEmpty ||
         _selectedDateTime == null) {
@@ -107,8 +114,7 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
       return;
     }
 
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) {
+    if (currentUser == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('You must be signed in')),
       );
@@ -123,13 +129,13 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
       final docRef = await FirebaseFirestore.instance.collection('capsules').add({
         'name': _nameController.text.trim(),
         'description': _descriptionController.text.trim(),
-        'creatorId': user.uid,
+        'creatorId': currentUser.uid,
         'unlockDate': Timestamp.fromDate(_selectedDateTime!),
         'memberIds': memberIds,
         'createdAt': Timestamp.now(),
         'isLocked': true,
         'aesKey': aesKey,
-        'backgroundId': _selectedBackground, // ← Will be null if not chosen
+        'backgroundId': _selectedBackground,
       });
 
       for (final image in _selectedImages) {
@@ -145,7 +151,7 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
             .collection('memories')
             .add({
           'type': 'image',
-          'uploaderId': user.uid,
+          'uploaderId': currentUser.uid,
           'timestamp': Timestamp.now(),
           'contentUrl': downloadUrl,
         });
@@ -163,7 +169,7 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
             .collection('memories')
             .add({
           'type': 'note',
-          'uploaderId': user.uid,
+          'uploaderId': currentUser.uid,
           'timestamp': Timestamp.now(),
           'encryptedText': encryptedNote,
         });
@@ -199,83 +205,6 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     } finally {
       setState(() => _isLoading = false);
     }
-  }
-
-  Widget _buildCollaboratorSearch(ColorScheme colorScheme, TextTheme textTheme) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        TypeAheadField<Map<String, dynamic>>(
-          controller: _collaboratorSearchController,
-          suggestionsCallback: (pattern) async {
-            if (pattern.isEmpty) return [];
-            final lowerPattern = pattern.toLowerCase();
-
-            final snap = await FirebaseFirestore.instance
-                .collection('users')
-                .where('username_lowercase', isGreaterThanOrEqualTo: lowerPattern)
-                .where('username_lowercase', isLessThan: lowerPattern + 'z')
-                .limit(10)
-                .get();
-
-            final users = <Map<String, dynamic>>[];
-            for (final doc in snap.docs) {
-              if (doc.id != FirebaseAuth.instance.currentUser?.uid &&
-                  !_collaborators.any((c) => c['uid'] == doc.id)) {
-                users.add({
-                  'uid': doc.id,
-                  'username_lowercase': doc['username_lowercase'],
-                });
-              }
-            }
-            return users;
-          },
-          builder: (context, controller, focusNode) {
-            return TextField(
-              controller: controller,
-              focusNode: focusNode,
-              style: textTheme.bodyLarge?.copyWith(color: colorScheme.onSurface),
-              decoration: InputDecoration(
-                hintText: 'Search username',
-                hintStyle: textTheme.bodyLarge?.copyWith(color: colorScheme.onSurface.withOpacity(0.5)),
-                filled: true,
-                fillColor: colorScheme.surface,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(8),
-                  borderSide: BorderSide.none,
-                ),
-                prefixIcon: Icon(Icons.search, color: colorScheme.primary),
-              ),
-            );
-          },
-          itemBuilder: (context, suggestion) {
-            return ListTile(
-              title: Text(suggestion['username_lowercase'], style: textTheme.bodyMedium),
-            );
-          },
-          onSelected: (suggestion) {
-            setState(() {
-              _collaborators.add(suggestion);
-              _collaboratorSearchController.clear();
-            });
-          },
-          emptyBuilder: (context) => Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Text('No user found', style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurface.withOpacity(0.6))),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          children: _collaborators
-              .map((c) => Chip(
-                    label: Text(c['username_lowercase']),
-                    onDeleted: () => _removeCollaborator(c),
-                  ))
-              .toList(),
-        ),
-      ],
-    );
   }
 
   @override
@@ -316,7 +245,7 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
             Text("Unlock Date", style: _labelStyle(context)),
             const SizedBox(height: 8),
             GestureDetector(
-              onTap: _selectDateTime,
+              onTap: _selectDate,
               child: Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
@@ -342,10 +271,9 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
               height: 100,
               child: ListView.builder(
                 scrollDirection: Axis.horizontal,
-                itemCount: _backgroundOptions.length + 1, // +1 for "No background"
+                itemCount: _backgroundOptions.length + 1,
                 itemBuilder: (context, idx) {
                   if (idx == 0) {
-                    // "No background" option
                     return GestureDetector(
                       onTap: () => setState(() => _selectedBackground = null),
                       child: Container(
@@ -353,17 +281,19 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
                         decoration: BoxDecoration(
                           border: Border.all(
                             color: _selectedBackground == null
-                                ? Colors.blue
+                                ? colorScheme.primary
                                 : Colors.transparent,
                             width: 3,
                           ),
                           borderRadius: BorderRadius.circular(10),
-                          color: Colors.black,
+                          color: colorScheme.surface,
                         ),
                         width: 90,
                         height: 90,
-                        child: const Center(
-                          child: Icon(Icons.close, color: Colors.white54, size: 36),
+                        child: Center(
+                          child: Icon(Icons.close,
+                              color: colorScheme.onSurface.withOpacity(0.5),
+                              size: 36),
                         ),
                       ),
                     );
@@ -375,7 +305,7 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
                         decoration: BoxDecoration(
                           border: Border.all(
                             color: _selectedBackground == (idx - 1)
-                                ? Colors.blue
+                                ? colorScheme.primary
                                 : Colors.transparent,
                             width: 3,
                           ),
@@ -396,7 +326,6 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
                 },
               ),
             ),
-
             const SizedBox(height: 24),
             _buildMediaAndCollaboratorRow(),
             const SizedBox(height: 24),
@@ -413,7 +342,7 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
                     child: ElevatedButton(
                       onPressed: _createCapsule,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueAccent,
+                        backgroundColor: colorScheme.primary,
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
@@ -429,23 +358,27 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
   }
 
   TextStyle _labelStyle(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
     return Theme.of(context).textTheme.bodyLarge!.copyWith(
-          color: Colors.white,
+          color: colorScheme.onBackground,
           fontWeight: FontWeight.w600,
         );
   }
 
-  Widget _buildInput(TextEditingController controller, String placeholder,
-      {int maxLines = 1}) {
+  Widget _buildInput(TextEditingController controller, String placeholder, {int maxLines = 1}) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     return TextField(
       controller: controller,
       maxLines: maxLines,
-      style: const TextStyle(color: Colors.white),
+      style: TextStyle(color: colorScheme.onBackground),
       decoration: InputDecoration(
         hintText: placeholder,
-        hintStyle: const TextStyle(color: Colors.grey),
+        hintStyle: textTheme.bodyMedium?.copyWith(
+          color: colorScheme.onSurface.withOpacity(0.5),
+        ),
         filled: true,
-        fillColor: Colors.grey[850],
+        fillColor: colorScheme.surface,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
@@ -455,6 +388,7 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
   }
 
   Widget _buildMediaAndCollaboratorRow() {
+    final colorScheme = Theme.of(context).colorScheme;
     return Row(
       children: [
         Expanded(
@@ -485,10 +419,10 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
                               onTap: () => _removeImage(file),
                               child: Container(
                                 decoration: BoxDecoration(
-                                  color: Colors.black54,
+                                  color: colorScheme.background.withOpacity(0.7),
                                   shape: BoxShape.circle,
                                 ),
-                                child: const Icon(Icons.close, size: 16, color: Colors.white),
+                                child: Icon(Icons.close, size: 16, color: colorScheme.onBackground),
                               ),
                             ),
                           ),
@@ -500,11 +434,11 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
                       width: 80,
                       height: 80,
                       decoration: BoxDecoration(
-                        color: Colors.grey[850],
+                        color: colorScheme.surface,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.grey.shade700),
+                        border: Border.all(color: colorScheme.outline),
                       ),
-                      child: const Icon(Icons.add_a_photo, color: Colors.white54),
+                      child: Icon(Icons.add_a_photo, color: colorScheme.onSurface.withOpacity(0.5)),
                     ),
                   ),
                 ],
@@ -521,12 +455,12 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
               const SizedBox(height: 8),
               TextField(
                 controller: _collaboratorEmailController,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: colorScheme.onBackground),
                 decoration: InputDecoration(
                   hintText: 'Email',
-                  hintStyle: const TextStyle(color: Colors.grey),
+                  hintStyle: TextStyle(color: colorScheme.onSurface.withOpacity(0.5)),
                   filled: true,
-                  fillColor: Colors.grey[850],
+                  fillColor: colorScheme.surface,
                   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),

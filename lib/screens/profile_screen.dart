@@ -20,13 +20,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text("My Profile"),
+        title: Text("My Profile", style: textTheme.titleMedium),
         centerTitle: true,
-        backgroundColor: Colors.black,
+        elevation: 0,
+        backgroundColor: colorScheme.background,
+        foregroundColor: colorScheme.primary,
         actions: [
           IconButton(
             icon: const Icon(Icons.share),
@@ -40,7 +43,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ],
       ),
-      backgroundColor: Colors.black,
+      backgroundColor: colorScheme.background,
       body: FutureBuilder<DocumentSnapshot?>(
         future: _getUserProfile(),
         builder: (context, snapshot) {
@@ -51,7 +54,10 @@ class _ProfileScreenState extends State<ProfileScreen> {
           final data = snapshot.data?.data() as Map<String, dynamic>?;
 
           if (data == null) {
-            return const Center(child: Text("No profile data found.", style: TextStyle(color: Colors.white)));
+            return Center(
+              child: Text("No profile data found.",
+                  style: textTheme.bodyLarge?.copyWith(color: colorScheme.onBackground)),
+            );
           }
 
           final firstName = data['firstName'] ?? '';
@@ -62,37 +68,60 @@ class _ProfileScreenState extends State<ProfileScreen> {
           final createdAt = data['createdAt']?.toDate();
           final fullName = "$firstName $lastName";
 
+          final String initials = (firstName.isNotEmpty ? firstName[0] : '') +
+              (lastName.isNotEmpty ? lastName[0] : '');
+
           return Column(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               const SizedBox(height: 24),
               CircleAvatar(
                 radius: 48,
-                backgroundImage: (photoUrl != null && photoUrl != '') ? NetworkImage(photoUrl) : null,
-                backgroundColor: Colors.grey[800],
+                backgroundImage:
+                    (photoUrl != null && photoUrl != '') ? NetworkImage(photoUrl) : null,
+                backgroundColor: colorScheme.surface,
                 child: (photoUrl == null || photoUrl == '')
                     ? Text(
-                        "${firstName.isNotEmpty ? firstName[0] : ''}${lastName.isNotEmpty ? lastName[0] : ''}".toUpperCase(),
-                        style: const TextStyle(fontSize: 28, color: Colors.white),
+                        initials.toUpperCase(),
+                        style: textTheme.headlineMedium?.copyWith(color: colorScheme.onSurface),
                       )
                     : null,
               ),
               const SizedBox(height: 16),
-              Text(username, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+              Text(
+                username,
+                style: textTheme.titleLarge?.copyWith(
+                  color: colorScheme.onBackground,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               const SizedBox(height: 8),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text("0 achievements", style: TextStyle(color: Colors.grey)),
+                  Text("0 achievements",
+                      style: textTheme.bodySmall?.copyWith(
+                          color: colorScheme.onBackground.withOpacity(0.6))),
                   const SizedBox(width: 8),
-                  const Text("•", style: TextStyle(color: Colors.grey)),
+                  Text('•', style: textTheme.bodySmall?.copyWith(color: colorScheme.onSurface)),
                   const SizedBox(width: 8),
-                  const Text("0 followers", style: TextStyle(color: Colors.grey)),
+                  Text("0 followers",
+                      style: textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onBackground.withOpacity(0.6),
+                      )),
                 ],
               ),
               const SizedBox(height: 8),
-              if (email.isNotEmpty) Text("u/$email", style: const TextStyle(color: Colors.grey)),
+              if (email.isNotEmpty)
+                Text("u/$email",
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurface.withOpacity(0.5),
+                    )),
               if (createdAt != null)
-                Text("${createdAt.month}/${createdAt.year}", style: const TextStyle(color: Colors.grey)),
+                Text("${createdAt.month}/${createdAt.year}",
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurface.withOpacity(0.5),
+                    )),
               const SizedBox(height: 20),
               ElevatedButton(
                 onPressed: () async {
@@ -100,36 +129,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     context,
                     MaterialPageRoute(builder: (_) => const EditProfileScreen()),
                   );
-                  setState(() {}); // Refresh after returning from edit screen
+                  setState(() {}); // Reload profile after edit
                 },
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.blueAccent),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: colorScheme.primary,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                ),
                 child: const Text("Edit Profile"),
               ),
               const SizedBox(height: 24),
-              Column(
-                children: const [
-                  Divider(
-                    color: Colors.white24,
-                    thickness: 0.5,
-                    height: 32,
-                    indent: 24,
-                    endIndent: 24,
-                  ),
-                  Text(
-                    "Your Capsules",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w500,
+
+              // Divider & Section Title
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  children: [
+                    Divider(
+                      color: colorScheme.onSurface.withOpacity(0.2),
+                      thickness: 0.5,
+                      height: 32,
                     ),
-                  ),
-                  SizedBox(height: 12),
-                ],
+                    Text(
+                      "Your Capsules",
+                      style: textTheme.titleMedium?.copyWith(
+                        color: colorScheme.onBackground,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ),
               ),
+
               const SizedBox(height: 16),
               const Expanded(
                 child: Center(
-                  child: Text("Start your first memory capsule 🎁", style: TextStyle(color: Colors.white54)),
+                  child: Text(
+                    "Start your first memory capsule 🎁",
+                    style: TextStyle(color: Colors.white54),
+                  ),
                 ),
               ),
             ],
