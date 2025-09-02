@@ -2,6 +2,8 @@ import 'package:boxed_app/widgets/theme_picker_sheet.dart';
 import 'package:flutter/material.dart';
 import 'package:boxed_app/screens/edit_profile_screen.dart';
 import 'package:boxed_app/screens/delete_account_screen.dart';
+import 'package:boxed_app/screens/bug_report_screen.dart';  // Bug report screen
+import 'package:boxed_app/screens/faq_screen.dart';  // FAQ screen
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
@@ -80,12 +82,23 @@ class SettingsScreen extends StatelessWidget {
           ),
           const SizedBox(height: 30),
           Text("Support", style: _sectionStyle(context)),
-          _buildOption(context, "FAQ", onTap: () {}),
-          _buildOption(context, "Contact Support", onTap: () {}),
-          _buildOption(context, "Report a Bug", onTap: () {}),
+          _buildOption(context, "FAQ", onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const FaqScreen()),
+            );
+          }),
+          _buildOption(context, "Report a Bug", onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const BugReportScreen()),
+            );
+          }),
           const SizedBox(height: 30),
           Text("About", style: _sectionStyle(context)),
-          _buildOption(context, "Privacy Policy", onTap: () {}),
+          _buildOption(context, "Privacy Policy", onTap: () {
+            // TODO: Add Privacy Policy screen or URL link here
+          }),
           const SizedBox(height: 16),
           Text(
             "Boxed v1.0.0",
