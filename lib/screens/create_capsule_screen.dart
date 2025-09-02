@@ -7,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:boxed_app/encryption/capsule_encryption.dart';
 
-
 class CreateCapsuleScreen extends StatefulWidget {
   const CreateCapsuleScreen({super.key});
 
@@ -66,7 +65,7 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     setState(() {
       _selectedImages.addAll(pickedFiles.map((x) => File(x.path)));
     });
-    }
+  }
 
   void _removeImage(File file) {
     setState(() {
@@ -76,7 +75,6 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
 
   Future<void> _createCapsule() async {
     final currentUser = FirebaseAuth.instance.currentUser;
-
     if (_nameController.text.trim().isEmpty ||
         _descriptionController.text.trim().isEmpty ||
         _selectedDateTime == null) {
@@ -98,19 +96,45 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     try {
       final aesKey = CapsuleEncryption.generateAESKey();
 
-      final capsuleRef = await FirebaseFirestore.instance
-          .collection('capsules')
-          .add({
+      // Prepare collaborators list: always includes creator, others from collaborator picker dialog.
+      final collaboratorsWithStatus = [
+        {
+          'userId': currentUser.uid,
+          'username': currentUser.displayName ?? 'You',
+          'role': 'Owner',
+          'accepted': true,
+          'photoUrl': currentUser.photoURL ?? '',
+        },
+        ..._collaborators.map((c) => {
+              'userId': c['userId'],
+              'username': c['username'],
+              'role': c['role'] ?? 'Editor',
+              'photoUrl': c['photoUrl'] ?? '',
+              'accepted': false,
+            })
+      ];
+
+      // List of all UIDs for quick queries
+      final memberIds = collaboratorsWithStatus.map((c) => c['userId'] as String).toList();
+
+      // If collaborators exist, status is pending.
+      final status = _collaborators.isNotEmpty ? 'pending' : 'active';
+
+      final capsuleRef =
+          await FirebaseFirestore.instance.collection('capsules').add({
         'name': _nameController.text.trim(),
         'description': _descriptionController.text.trim(),
         'creatorId': currentUser.uid,
+        'creatorUsername': currentUser.displayName ?? '',
         'unlockDate': Timestamp.fromDate(_selectedDateTime!),
-        'memberIds': [currentUser.uid, ..._collaborators.map((c) => c['userId'])],
-        'collaborators': _collaborators,
+        'memberIds': memberIds,
+        'collaborators': collaboratorsWithStatus,
         'createdAt': Timestamp.now(),
+        'status': status,
         'isLocked': true,
         'aesKey': aesKey,
         'backgroundId': _selectedBackground,
+        'emoji': '🎁',
       });
 
       // Upload images
@@ -130,10 +154,10 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
         });
       }
 
-      // Add note
+      // Add encrypted note
       if (_noteController.text.trim().isNotEmpty) {
-        final encrypted = CapsuleEncryption.encryptMemory(
-            _noteController.text.trim(), aesKey);
+        final encrypted =
+            CapsuleEncryption.encryptMemory(_noteController.text.trim(), aesKey);
         await capsuleRef.collection('memories').add({
           'type': 'note',
           'uploaderId': currentUser.uid,
@@ -187,11 +211,9 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
             _sectionLabel(context, "Capsule Name"),
             _buildInput(_nameController, 'Enter a title'),
             const SizedBox(height: 16),
-
             _sectionLabel(context, "Description"),
             _buildInput(_descriptionController, 'What’s this about?', maxLines: 4),
             const SizedBox(height: 16),
-
             _sectionLabel(context, "Unlock Date"),
             GestureDetector(
               onTap: _selectDate,
@@ -210,7 +232,6 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
               ),
             ),
             const SizedBox(height: 16),
-
             _sectionLabel(context, "Background"),
             SizedBox(
               height: 90,
@@ -240,7 +261,6 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
               ),
             ),
             const SizedBox(height: 24),
-
             _sectionLabel(context, "Collaborators"),
             ElevatedButton.icon(
               onPressed: _openCollaboratorPicker,
@@ -256,11 +276,9 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
             ),
             const SizedBox(height: 8),
             _buildCollaboratorChips(),
-
             const SizedBox(height: 24),
             _sectionLabel(context, "Write a Note"),
             _buildInput(_noteController, 'Leave something inside...', maxLines: 3),
-
             const SizedBox(height: 24),
             _sectionLabel(context, "Add Images"),
             Wrap(
@@ -295,7 +313,6 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
                 ),
               ],
             ),
-
             const SizedBox(height: 36),
             _isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -303,14 +320,12 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: _createCapsule,
-                      child: const Text("Create Capsule",
-                          style: TextStyle(fontSize: 16)),
+                      child: const Text("Create Capsule", style: TextStyle(fontSize: 16)),
                       style: ElevatedButton.styleFrom(
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         backgroundColor: colorScheme.primary,
                         shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
+                            borderRadius: BorderRadius.circular(12)),
                       ),
                     ),
                   ),
@@ -324,15 +339,20 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     return Wrap(
       spacing: 8,
       children: _collaborators.map((c) {
-        final avatar = c['photoUrl'] != null && c['photoUrl'].toString().isNotEmpty
+        final avatar = (c['photoUrl'] as String?)?.isNotEmpty == true
             ? NetworkImage(c['photoUrl'])
             : null;
         return Chip(
           avatar: avatar != null
               ? CircleAvatar(backgroundImage: avatar)
-              : CircleAvatar(child: Text((c['username'] ?? '?')[0].toUpperCase())),
+              : CircleAvatar(
+                  child: Text((c['username'] ?? '?')[0].toUpperCase())),
           label: Text('${c['username']} (${c['role']})'),
-          onDeleted: () => _removeImage(c as File),
+          onDeleted: () {
+            setState(() {
+              _collaborators.remove(c);
+            });
+          },
         );
       }).toList(),
     );
@@ -343,16 +363,12 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
       padding: const EdgeInsets.only(bottom: 6),
       child: Text(
         text,
-        style: Theme.of(context)
-            .textTheme
-            .labelLarge
-            ?.copyWith(fontWeight: FontWeight.bold),
+        style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
       ),
     );
   }
 
-  Widget _buildInput(TextEditingController controller, String hint,
-      {int maxLines = 1}) {
+  Widget _buildInput(TextEditingController controller, String hint, {int maxLines = 1}) {
     return TextField(
       controller: controller,
       maxLines: maxLines,
@@ -361,11 +377,11 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
         filled: true,
         fillColor: Theme.of(context).colorScheme.surface,
         border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: BorderSide.none),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide.none,
+        ),
         contentPadding: const EdgeInsets.all(14),
       ),
     );
   }
-
 }
