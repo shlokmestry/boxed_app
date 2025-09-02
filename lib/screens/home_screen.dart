@@ -1,5 +1,4 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cryptography/dart.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -18,6 +17,32 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  String? _username;
+  String? _photoUrl;
+  bool _loadingUsername = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchUserInfo();
+  }
+
+  Future<void> _fetchUserInfo() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    final profileDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
+
+    setState(() {
+      _username = profileDoc.data()?['username'] ?? 'User';
+      _photoUrl = profileDoc.data()?['photoUrl'] ?? user.photoURL;
+      _loadingUsername = false;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = FirebaseAuth.instance.currentUser;
@@ -25,7 +50,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final textTheme = Theme.of(context).textTheme;
 
     if (user == null) {
-      // User is not logged in
       return Scaffold(
         appBar: AppBar(
           title: Text(
@@ -83,7 +107,6 @@ class _HomeScreenState extends State<HomeScreen> {
             .orderBy('createdAt', descending: true)
             .snapshots(),
         builder: (context, snapshot) {
-          // Error handling
           if (snapshot.hasError) {
             return Center(
               child: Text(
@@ -94,12 +117,10 @@ class _HomeScreenState extends State<HomeScreen> {
             );
           }
 
-          // While waiting for data
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
           }
 
-          // No data or no documents
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return Center(
               child: Text(
@@ -124,8 +145,6 @@ class _HomeScreenState extends State<HomeScreen> {
               final emoji = data['emoji'] ?? '📦';
               final Timestamp? unlockTimestamp = data['unlockDate'];
               DateTime unlockDate;
-
-              // Defensive null check on unlockDate
               if (unlockTimestamp != null) {
                 unlockDate = unlockTimestamp.toDate();
               } else {
@@ -143,7 +162,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 isUnlocked: isUnlocked,
                 isPending: isPending,
                 onTap: isPending
-                    ? null // Disable tap if still pending
+                    ? null
                     : () {
                         Navigator.push(
                           context,
@@ -165,43 +184,84 @@ class _HomeScreenState extends State<HomeScreen> {
   Drawer _buildDrawer(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final avatar =
+        _photoUrl != null ? NetworkImage(_photoUrl!) : null;
+    final initials =
+        (_username != null && _username!.isNotEmpty)
+            ? _username![0].toUpperCase()
+            : 'U';
 
     return Drawer(
       backgroundColor: colorScheme.background,
+      elevation: 0,
       child: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Header (profile photo & username, with loader)
             Padding(
-              padding: const EdgeInsets.all(20),
-              child: Text(
-                'Boxed',
-                style: textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: colorScheme.primary,
-                  letterSpacing: 1.2,
+              padding: const EdgeInsets.fromLTRB(20, 24, 20, 16),
+              child: GestureDetector(
+                onTap: () {
+                  Navigator.pop(context);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                  );
+                },
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 24,
+                      backgroundColor: colorScheme.primary.withOpacity(0.14),
+                      backgroundImage: avatar,
+                      child: avatar == null
+                          ? Text(
+                              initials,
+                              style: TextStyle(
+                                color: colorScheme.primary,
+                                fontWeight: FontWeight.w800,
+                                fontSize: 20,
+                              ),
+                            )
+                          : null,
+                    ),
+                    const SizedBox(width: 14),
+                    _loadingUsername
+                        ? SizedBox(
+                            width: 80,
+                            height: 18,
+                            child: LinearProgressIndicator(
+                              backgroundColor:
+                                  colorScheme.onBackground.withOpacity(0.08),
+                              color: colorScheme.primary,
+                              minHeight: 3,
+                            ),
+                          )
+                        : Text(
+                            _username ?? "",
+                            style: textTheme.bodyLarge?.copyWith(
+                              color: colorScheme.onBackground,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 17,
+                              letterSpacing: 0.15,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                  ],
                 ),
               ),
             ),
-            const SizedBox(height: 10),
-            _DrawerButton(
-              icon: Icons.folder_special,
+            const SizedBox(height: 4),
+
+            _DrawerMenuItem(
               label: 'My Capsules',
               onTap: () => Navigator.pop(context),
+              fontSize: 16,
             ),
-            _DrawerButton(
-              icon: Icons.person,
-              label: 'My Profile',
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const ProfileScreen()),
-                );
-              },
-            ),
-            _DrawerButton(
-              icon: Icons.group_rounded,
+            const SizedBox(height: 11),
+            _DrawerMenuItem(
               label: 'Collaborators',
               onTap: () {
                 Navigator.pop(context);
@@ -210,25 +270,22 @@ class _HomeScreenState extends State<HomeScreen> {
                   MaterialPageRoute(builder: (_) => const CollaboratorInvitesScreen()),
                 );
               },
+              fontSize: 16,
             ),
-            _DrawerButton(
-              icon: Icons.group,
+            const SizedBox(height: 11),
+            _DrawerMenuItem(
               label: 'Shared With Me',
               onTap: () {
                 Navigator.pop(context);
                 _showSnack(context, "Shared Capsules coming soon");
               },
+              fontSize: 16,
             ),
-            _DrawerButton(
-              icon: Icons.color_lens_outlined,
-              label: 'Themes',
-              onTap: () {
-                Navigator.pop(context);
-                _showSnack(context, "Themes feature coming soon");
-              },
-            ),
-            _DrawerButton(
-              icon: Icons.settings,
+            const SizedBox(height: 11),
+
+            // Themes removed from drawer
+
+            _DrawerMenuItem(
               label: 'Settings',
               onTap: () {
                 Navigator.pop(context);
@@ -237,17 +294,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   MaterialPageRoute(builder: (_) => const SettingsScreen()),
                 );
               },
+              fontSize: 16,
             ),
             const Spacer(),
-            _DrawerButton(
-              icon: Icons.logout,
+            _DrawerMenuItem(
               label: 'Sign Out',
-              iconColor: Colors.redAccent,
-              textColor: Colors.redAccent,
               onTap: () async {
                 Navigator.pop(context);
                 await FirebaseAuth.instance.signOut();
               },
+              fontSize: 18, // increased font size for visibility
+              color: Colors.redAccent,
+              fontWeight: FontWeight.w600,
             ),
             const SizedBox(height: 20),
           ],
@@ -268,6 +326,48 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
+class _DrawerMenuItem extends StatelessWidget {
+  final String label;
+  final VoidCallback onTap;
+  final double fontSize;
+  final Color? color;
+  final FontWeight? fontWeight;
+
+  const _DrawerMenuItem({
+    required this.label,
+    required this.onTap,
+    this.fontSize = 16,
+    this.color,
+    this.fontWeight,
+    Key? key,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 23),
+      child: GestureDetector(
+        onTap: onTap,
+        behavior: HitTestBehavior.opaque,
+        child: Container(
+          alignment: Alignment.centerLeft,
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text(
+            label,
+            style: TextStyle(
+              color: color ?? Theme.of(context).colorScheme.onSurface,
+              fontSize: fontSize,
+              fontWeight: fontWeight ?? FontWeight.w500,
+              letterSpacing: 0.05,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// CapsuleCard remains unchanged from previous version
 class CapsuleCard extends StatelessWidget {
   final String title;
   final String emoji;
@@ -296,7 +396,7 @@ class CapsuleCard extends StatelessWidget {
         : 'Unlocks in ${_formatCountdown(unlockDate)}';
 
     return Opacity(
-      opacity: isPending ? 0.6 : 1.0, // Dim if pending
+      opacity: isPending ? 0.6 : 1.0,
       child: GestureDetector(
         onTap: onTap,
         child: Card(
@@ -369,57 +469,5 @@ class CapsuleCard extends StatelessWidget {
     } else {
       return 'less than a minute';
     }
-  }
-}
-
-class _DrawerButton extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final Color? iconColor;
-  final Color? textColor;
-
-  const _DrawerButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.iconColor,
-    this.textColor,
-    Key? key,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final baseIconColor = iconColor ?? colorScheme.onSurface;
-    final baseTextColor = textColor ?? colorScheme.onSurface;
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          decoration: BoxDecoration(
-            color: colorScheme.surface,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
-          child: Row(
-            children: [
-              Icon(icon, color: baseIconColor),
-              const SizedBox(width: 16),
-              Text(
-                label,
-                style: TextStyle(
-                  color: baseTextColor,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
   }
 }
