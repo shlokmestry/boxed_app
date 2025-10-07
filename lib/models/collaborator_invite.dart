@@ -21,7 +21,6 @@ class CollaboratorInvite {
 
   factory CollaboratorInvite.fromFirestore(
       String capsuleId, Map<String, dynamic> data) {
-    // Assumes capsule document structure includes creator/username/role
     return CollaboratorInvite(
       capsuleId: capsuleId,
       capsuleTitle: data['name'] ?? '',

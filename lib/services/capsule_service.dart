@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 class CapsuleService {
   /// Creates a new encrypted capsule and stores it in Firestore
+  /// If there are collaborators, set status to 'pending' to await acceptance
   static Future<void> createEncryptedCapsule({
     required String creatorId,
     required String name,
@@ -11,16 +12,14 @@ class CapsuleService {
     required DateTime unlockDate,
     required List<String> memberIds, // including creator
     required Map<String, String> userPublicKeys, // userId -> PEM
+    bool hasCollaborators = false,
   }) async {
     try {
-      // Generate capsule ID
       final capsuleId =
           FirebaseFirestore.instance.collection('capsules').doc().id;
 
-      // Generate AES key for capsule
       final Uint8List aesKey = EncryptionService.generateAesKey();
 
-      // Encrypt AES key per user
       final Map<String, String> encryptedKeys = {};
       for (final userId in memberIds) {
         final userPem = userPublicKeys[userId];
@@ -33,7 +32,13 @@ class CapsuleService {
         encryptedKeys[userId] = encryptedKey;
       }
 
-      // Store capsule in Firestore with proper Timestamp fields
+      final List<Map<String, dynamic>> collaborators = memberIds.map((userId) {
+        return {
+          'userId': userId,
+          'accepted': userId == creatorId ? true : !hasCollaborators ? true : false,
+        };
+      }).toList();
+
       await FirebaseFirestore.instance
           .collection('capsules')
           .doc(capsuleId)
@@ -45,9 +50,10 @@ class CapsuleService {
         'unlockDate': Timestamp.fromDate(unlockDate.toUtc()),
         'memberIds': memberIds,
         'capsuleKeys': encryptedKeys,
+        'collaborators': collaborators,
         'createdAt': Timestamp.fromDate(DateTime.now().toUtc()),
         'isLocked': true,
-        'status': 'active', // You may want to track status as well
+        'status': hasCollaborators ? 'pending' : 'active',
       });
 
       print("✅ Capsule '$name' created successfully with ID: $capsuleId");
@@ -58,7 +64,6 @@ class CapsuleService {
     }
   }
 
-  /// Fetches all capsules the user is a member of (for debugging)
   static Future<List<Map<String, dynamic>>> fetchUserCapsules(
       String userId) async {
     try {

@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:boxed_app/encryption/capsule_encryption.dart';
+
 
 class CapsuleDetailScreen extends StatefulWidget {
   final String capsuleId;
