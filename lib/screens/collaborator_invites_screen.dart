@@ -3,18 +3,20 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:rxdart/rxdart.dart';
 
+import 'capsule_detail_screen.dart';
+
 class CollaboratorInvitesScreen extends StatefulWidget {
   const CollaboratorInvitesScreen({super.key});
 
   @override
-  State<CollaboratorInvitesScreen> createState() => _CollaboratorInvitesScreenState();
+  State<CollaboratorInvitesScreen> createState() =>
+      _CollaboratorInvitesScreenState();
 }
 
 class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
   User? currentUser = FirebaseAuth.instance.currentUser;
   bool _isLoading = false;
 
-  // Pending invites where user is invited
   Stream<List<QueryDocumentSnapshot>> _pendingInvitesStream() {
     return FirebaseAuth.instance.authStateChanges().switchMap((user) {
       if (user == null) {
@@ -39,7 +41,6 @@ class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
     });
   }
 
-  // Declined invites sent by current user, shown for 24 hours
   Stream<List<QueryDocumentSnapshot>> _recentDeclinedInvitesStream() {
     return FirebaseAuth.instance.authStateChanges().switchMap((user) {
       if (user == null) {
@@ -64,11 +65,33 @@ class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
     });
   }
 
-  Future<void> _acceptInvite(BuildContext context, QueryDocumentSnapshot capsuleDoc) async {
+  Future<void> _acceptInvite(
+      BuildContext context, QueryDocumentSnapshot capsuleDoc) async {
+    // 1. Show dialog BEFORE updating Firestore
+    final bool? editNow = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Capsule'),
+        content: const Text(
+            'You accepted the invite. Do you want to edit this capsule now?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('No'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Yes'),
+          ),
+        ],
+      ),
+    );
+
     setState(() {
       _isLoading = true;
     });
-    final capsuleRef = FirebaseFirestore.instance.collection('capsules').doc(capsuleDoc.id);
+    final capsuleRef =
+        FirebaseFirestore.instance.collection('capsules').doc(capsuleDoc.id);
     final capsuleData = capsuleDoc.data() as Map<String, dynamic>;
     List<dynamic> collaborators = (capsuleData['collaborators'] as List<dynamic>)
         .map((c) => Map<String, dynamic>.from(c as Map))
@@ -98,6 +121,14 @@ class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Collaboration started!")),
         );
+
+        if (editNow == true) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+                builder: (_) => CapsuleDetailScreen(capsuleId: capsuleDoc.id)),
+          );
+        }
       }
     } catch (e) {
       if (context.mounted) {
@@ -112,11 +143,13 @@ class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
     }
   }
 
-  Future<void> _declineInvite(BuildContext context, QueryDocumentSnapshot capsuleDoc) async {
+  Future<void> _declineInvite(
+      BuildContext context, QueryDocumentSnapshot capsuleDoc) async {
     setState(() {
       _isLoading = true;
     });
-    final capsuleRef = FirebaseFirestore.instance.collection('capsules').doc(capsuleDoc.id);
+    final capsuleRef =
+        FirebaseFirestore.instance.collection('capsules').doc(capsuleDoc.id);
     final capsuleData = capsuleDoc.data() as Map<String, dynamic>;
 
     List<dynamic> collaborators = (capsuleData['collaborators'] as List<dynamic>)
@@ -194,7 +227,8 @@ class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
                           return Card(
                             margin: const EdgeInsets.only(bottom: 16),
                             shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12)),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                             child: Padding(
                               padding: const EdgeInsets.all(16),
                               child: Column(
@@ -202,34 +236,35 @@ class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
                                 children: [
                                   Text(
                                     "$creator is inviting you to collaborate on:",
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .bodyLarge
-                                        ?.copyWith(fontWeight: FontWeight.bold),
+                                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                          fontWeight: FontWeight.bold,
+                                        ),
                                   ),
                                   const SizedBox(height: 8),
-                                  Text(capsuleTitle,
-                                      style: Theme.of(context).textTheme.titleMedium),
+                                  Text(
+                                    capsuleTitle,
+                                    style: Theme.of(context).textTheme.titleMedium,
+                                  ),
                                   const SizedBox(height: 16),
                                   Row(
                                     children: [
                                       Expanded(
                                         child: OutlinedButton(
-                                          onPressed: () =>
-                                              _declineInvite(context, docs[index]),
+                                          onPressed: () => _declineInvite(context, docs[index]),
                                           child: const Text("Decline"),
                                         ),
                                       ),
                                       const SizedBox(width: 12),
                                       Expanded(
                                         child: ElevatedButton(
-                                          onPressed: () =>
-                                              _acceptInvite(context, docs[index]),
+                                          onPressed: () async {
+                                            await _acceptInvite(context, docs[index]);
+                                          },
                                           child: const Text("Accept"),
                                         ),
                                       ),
                                     ],
-                                  )
+                                  ),
                                 ],
                               ),
                             ),
@@ -239,7 +274,6 @@ class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
                     },
                   ),
                 ),
-
                 StreamBuilder<List<QueryDocumentSnapshot>>(
                   stream: _recentDeclinedInvitesStream(),
                   builder: (context, snapshot) {
@@ -254,7 +288,6 @@ class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
                         final data = doc.data() as Map<String, dynamic>;
                         final declinedBy = data['declinedBy'];
                         final declinedUsername = declinedBy?['username'] ?? 'Unknown';
-                        final capsuleTitle = data['name'] ?? "Untitled Capsule";
                         return Padding(
                           padding: const EdgeInsets.all(8.0),
                           child: Card(
@@ -262,7 +295,7 @@ class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
                             child: Padding(
                               padding: const EdgeInsets.all(12.0),
                               child: Text(
-                                "$declinedUsername declined your capsule collaboration request for '$capsuleTitle'. Please create a new capsule.",
+                                "$declinedUsername decided not to join this capsule party. Maybe try creating a new one?",
                                 style: TextStyle(
                                   color: Colors.red.shade900,
                                   fontWeight: FontWeight.bold,
