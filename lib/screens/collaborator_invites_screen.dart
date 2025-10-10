@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:rxdart/rxdart.dart';
 
 class CollaboratorInvitesScreen extends StatefulWidget {
   const CollaboratorInvitesScreen({super.key});
@@ -10,39 +11,44 @@ class CollaboratorInvitesScreen extends StatefulWidget {
 }
 
 class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
-  final currentUser = FirebaseAuth.instance.currentUser;
+  User? currentUser = FirebaseAuth.instance.currentUser;
   bool _isLoading = false;
 
   Stream<List<QueryDocumentSnapshot>> _pendingInvitesStream() {
-    // Since Firestore cannot query by matching a map inside array, fetch all pending capsules with currentUser in memberIds,
-    // then filter locally for accepted==false on this user.
-    return FirebaseFirestore.instance
-        .collection('capsules')
-        .where('status', isEqualTo: 'pending')
-        .where('memberIds', arrayContains: currentUser?.uid)
-        .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.where((doc) {
-        final collaborators = doc['collaborators'] as List<dynamic>? ?? [];
-        final myCollab = collaborators.firstWhere(
-          (c) => c['userId'] == currentUser?.uid,
-          orElse: () => null,
-        );
-        return myCollab != null && myCollab['accepted'] == false;
-      }).toList();
+    return FirebaseAuth.instance.authStateChanges().switchMap((user) {
+      if (user == null) {
+        return const Stream<List<QueryDocumentSnapshot>>.empty();
+      }
+      return FirebaseFirestore.instance
+          .collection('capsules')
+          .where('status', isEqualTo: 'pending')
+          .where('memberIds', arrayContains: user.uid)
+          .snapshots()
+          .map((snapshot) {
+        return snapshot.docs.where((doc) {
+          final data = doc.data();
+          final collaborators = (data['collaborators'] as List?) ?? [];
+          final myCollab = collaborators.cast<Map>().firstWhere(
+            (c) => (c['userId'] ?? '') == user.uid,
+            orElse: () => {},
+          );
+          return myCollab.isNotEmpty && myCollab['accepted'] == false;
+        }).toList();
+      });
     });
   }
 
   Future<void> _acceptInvite(BuildContext context, QueryDocumentSnapshot capsuleDoc) async {
+    print("Accept invite called on capsule: ${capsuleDoc.id}");
     setState(() {
       _isLoading = true;
     });
     final capsuleRef = FirebaseFirestore.instance.collection('capsules').doc(capsuleDoc.id);
     final capsuleData = capsuleDoc.data() as Map<String, dynamic>;
+    List<dynamic> collaborators = (capsuleData['collaborators'] as List<dynamic>)
+        .map((c) => Map<String, dynamic>.from(c as Map))
+        .toList();
 
-    List<dynamic> collaborators = (capsuleData['collaborators'] as List<dynamic>).map((c) => Map<String, dynamic>.from(c)).toList();
-
-    // Update current user's acceptance
     for (var collab in collaborators) {
       if (collab['userId'] == currentUser?.uid) {
         collab['accepted'] = true;
@@ -50,14 +56,18 @@ class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
       }
     }
 
-    // If all collaborators accepted, set status to active
     final allAccepted = collaborators.every((c) => c['accepted'] == true);
 
+    final Map<String, dynamic> updateMap = {'collaborators': collaborators};
+    if (allAccepted) {
+      updateMap['status'] = 'active';
+    }
+    if (capsuleData.containsKey('declinedBy')) {
+      updateMap['declinedBy'] = FieldValue.delete();
+    }
+
     try {
-      await capsuleRef.update({
-        'collaborators': collaborators,
-        if (allAccepted) 'status': 'active',
-      });
+      await capsuleRef.update(updateMap);
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -77,29 +87,32 @@ class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
     }
   }
 
-  Future<void> _declineInvite(BuildContext context, String capsuleId) async {
-    setState(() {
-      _isLoading = true;
-    });
-    try {
-      await FirebaseFirestore.instance.collection('capsules').doc(capsuleId).delete();
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Invite declined and capsule deleted.")),
-        );
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Error declining invite: $e")),
-        );
-      }
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
+Future<void> _declineInvite(BuildContext context, QueryDocumentSnapshot capsuleDoc) async {
+  print("Decline invite called on capsule: ${capsuleDoc.id}");
+  setState(() {
+    _isLoading = true;
+  });
+  final capsuleRef = FirebaseFirestore.instance.collection('capsules').doc(capsuleDoc.id);
+  try {
+    await capsuleRef.delete();
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Invite declined and capsule deleted.")),
+      );
     }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text("Error declining invite: $e")),
+      );
+    }
+  } finally {
+    setState(() {
+      _isLoading = false;
+    });
   }
+}
+
 
   @override
   Widget build(BuildContext context) {
@@ -152,7 +165,7 @@ class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
                               children: [
                                 Expanded(
                                   child: OutlinedButton(
-                                    onPressed: () => _declineInvite(context, docs[index].id),
+                                    onPressed: () => _declineInvite(context, docs[index]),
                                     child: const Text("Decline"),
                                   ),
                                 ),

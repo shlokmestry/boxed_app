@@ -51,6 +51,7 @@ dependencies:
   pointycastle: ^3.9.1
   crypto: ^3.0.6
   rsa_encrypt: ^2.0.0
+  rxdart: ^0.28.0
 
 dev_dependencies:
   flutter_test:

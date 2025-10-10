@@ -96,7 +96,7 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     try {
       final aesKey = CapsuleEncryption.generateAESKey();
 
-      // Construct collaborators array for Firestore
+      // Prepare collaborators list for Firestore: always includes creator
       final collaboratorsWithStatus = [
         {
           'userId': currentUser.uid,
@@ -114,10 +114,7 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
             })
       ];
 
-      // List all unique UIDs
       final memberIds = collaboratorsWithStatus.map((c) => c['userId'] as String).toList();
-
-      // pending when at least 1 collaborator, otherwise active
       final status = _collaborators.isNotEmpty ? 'pending' : 'active';
 
       final capsuleRef =
