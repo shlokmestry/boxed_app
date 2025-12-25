@@ -1,8 +1,11 @@
 import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-
+import 'package:boxed_app/services/boxed_encryption_service.dart';
+import 'package:boxed_app/state/user_crypto_state.dart';
+import 'package:boxed_app/state/capsule_crypto_state.dart';
 
 class CapsuleDetailScreen extends StatefulWidget {
   final String capsuleId;
@@ -20,8 +23,8 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
   DateTime? _unlockDate;
   String? _capsuleTitle;
   String? _capsuleDescription;
-  String? _aesKey;
   int? _backgroundId;
+
   Timer? _timer;
   Duration _remaining = Duration.zero;
   bool _showContent = false;
@@ -56,13 +59,51 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
         .collection('capsules')
         .doc(widget.capsuleId)
         .get();
+
     final data = doc.data();
     if (data == null) return;
 
+    // ============================
+    // ✅ STEP 6: Decrypt capsule key from capsuleKeys[uid]
+    // ============================
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      // If user is not signed in, we can't decrypt anything.
+      setState(() => _loading = false);
+      return;
+    }
+
+    final encryptedCapsuleKey = (data['capsuleKeys'] as Map?)?[currentUser.uid];
+    if (encryptedCapsuleKey == null) {
+      // User doesn't have access to this capsule key.
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No capsule key found for this user.')),
+      );
+      return;
+    }
+
+    try {
+      final capsuleKey = await BoxedEncryptionService.decryptCapsuleKeyForUser(
+        encryptedCapsuleKey: encryptedCapsuleKey,
+        userMasterKey: UserCryptoState.userMasterKey,
+      );
+
+      CapsuleCryptoState.setCapsuleKey(widget.capsuleId, capsuleKey);
+    } catch (e) {
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to decrypt capsule key: $e')),
+      );
+      return;
+    }
+
+    // ============================
+    // Metadata (unchanged)
+    // ============================
     final ts = data['unlockDate'];
     final title = data['name'];
     final description = data['description'];
-    final key = data['aesKey'];
     final bgId = data['backgroundId'];
 
     if (ts != null) {
@@ -74,7 +115,6 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
         _unlockDate = date;
         _capsuleTitle = title;
         _capsuleDescription = description;
-        _aesKey = key;
         _backgroundId = bgId;
         _remaining = date.difference(now);
         _isUnlocked = unlocked;
@@ -86,6 +126,7 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
         final now = DateTime.now();
         final unlockedNow = now.isAfter(date);
         final newDuration = date.difference(now);
+
         if (unlockedNow) {
           _timer?.cancel();
           setState(() {
@@ -110,12 +151,16 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
           }
         });
       }
+    } else {
+      setState(() => _loading = false);
     }
   }
 
   @override
   void dispose() {
     _timer?.cancel();
+    // ✅ STEP 6: clear decrypted capsule key from memory on exit
+    CapsuleCryptoState.clearCapsuleKey(widget.capsuleId);
     super.dispose();
   }
 
@@ -131,6 +176,7 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+
     if (_loading) {
       return Scaffold(
         backgroundColor: colorScheme.background,
@@ -175,7 +221,8 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
               if (_unlockDate != null)
                 Text(
                   'Unlocks on: ${DateFormat.yMMMd().add_jm().format(_unlockDate!)}',
-                  style: TextStyle(color: colorScheme.onBackground.withOpacity(0.6)),
+                  style: TextStyle(
+                      color: colorScheme.onBackground.withOpacity(0.6)),
                   textAlign: TextAlign.center,
                 ),
               const SizedBox(height: 18),
@@ -188,8 +235,10 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
                 onPressed: () => Navigator.pop(context),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: colorScheme.primary,
-                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  padding:
+                      const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
                 ),
                 child: const Text("Back", style: TextStyle(fontSize: 16)),
               ),
@@ -203,6 +252,7 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
   Widget _buildUnlockedView() {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+
     final String? backgroundAsset = (_backgroundId != null &&
             _backgroundId! >= 0 &&
             _backgroundId! < _backgroundImages.length)
@@ -248,7 +298,8 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
                     const SizedBox(height: 10),
                     Text(
                       _capsuleDescription!,
-                      style: textTheme.bodyMedium?.copyWith(color: Colors.white70),
+                      style:
+                          textTheme.bodyMedium?.copyWith(color: Colors.white70),
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -272,9 +323,11 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
                         return ListView.separated(
                           scrollDirection: Axis.horizontal,
                           itemCount: memories.length,
-                          separatorBuilder: (_, __) => const SizedBox(width: 14),
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(width: 14),
                           itemBuilder: (context, index) {
-                            final memory = memories[index].data() as Map<String, dynamic>;
+                            final memory =
+                                memories[index].data() as Map<String, dynamic>;
                             return _buildImageMemory(memory);
                           },
                         );
@@ -295,7 +348,8 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
                           if (_unlockDate != null)
                             Text(
                               'Unlocked on: ${DateFormat.yMMMd().add_jm().format(_unlockDate!)}',
-                              style: textTheme.bodySmall?.copyWith(color: Colors.white70),
+                              style: textTheme.bodySmall
+                                  ?.copyWith(color: Colors.white70),
                             ),
                         ],
                       ),
@@ -329,7 +383,8 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
 class _CollaboratorAvatars extends StatelessWidget {
   final List<String> collaborators;
 
-  const _CollaboratorAvatars({required this.collaborators, Key? key}) : super(key: key);
+  const _CollaboratorAvatars({required this.collaborators, Key? key})
+      : super(key: key);
 
   @override
   Widget build(BuildContext context) {
@@ -348,7 +403,9 @@ class _CollaboratorAvatars extends StatelessWidget {
               radius: 15,
               backgroundColor: Colors.white24,
               child: Text(
-                nameOrInitial.isNotEmpty ? nameOrInitial[0].toUpperCase() : '?',
+                nameOrInitial.isNotEmpty
+                    ? nameOrInitial[0].toUpperCase()
+                    : '?',
                 style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.bold,

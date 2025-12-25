@@ -1,10 +1,39 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'encryption_service.dart';
 import 'dart:typed_data';
+import 'package:boxed_app/services/boxed_encryption_service.dart';
+import 'package:boxed_app/state/user_crypto_state.dart';
+import 'package:cryptography/cryptography.dart';
+
 
 class CapsuleService {
   /// Creates a new encrypted capsule and stores it in Firestore
   /// If there are collaborators, set status to 'pending' to await acceptance
+  
+  static Future<Map<String, String>> _buildCapsuleKeysForMembers({
+  required List<String> memberIds,
+}) async {
+  final userMasterKey = UserCryptoState.userMasterKey;
+
+  // Generate one capsule key for this capsule
+  final capsuleKey = await BoxedEncryptionService.generateCapsuleKey();
+
+  // Encrypt capsule key separately for each member using the SAME master key
+  // NOTE: This assumes same user on device creating capsule (creator) is encrypting for all.
+  // We'll upgrade this in a later step so each member uses THEIR own master key.
+  final capsuleKeys = <String, String>{};
+
+  for (final uid in memberIds) {
+    final enc = await BoxedEncryptionService.encryptCapsuleKeyForUser(
+      capsuleKey: capsuleKey,
+      userMasterKey: userMasterKey,
+    );
+    capsuleKeys[uid] = enc;
+  }
+
+  return capsuleKeys;
+}
+
   static Future<void> createEncryptedCapsule({
     required String creatorId,
     required String name,

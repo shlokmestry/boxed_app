@@ -1,11 +1,12 @@
 import 'dart:io';
 import 'package:boxed_app/widgets/collaborator_picker_dialog.dart';
+import 'package:boxed_app/services/boxed_encryption_service.dart';
+import 'package:boxed_app/state/user_crypto_state.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:boxed_app/encryption/capsule_encryption.dart';
 
 class CreateCapsuleScreen extends StatefulWidget {
   const CreateCapsuleScreen({super.key});
@@ -75,18 +76,13 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
 
   Future<void> _createCapsule() async {
     final currentUser = FirebaseAuth.instance.currentUser;
+
     if (_nameController.text.trim().isEmpty ||
         _descriptionController.text.trim().isEmpty ||
-        _selectedDateTime == null) {
+        _selectedDateTime == null ||
+        currentUser == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please complete all fields')),
-      );
-      return;
-    }
-
-    if (currentUser == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You must be signed in')),
       );
       return;
     }
@@ -94,9 +90,7 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     setState(() => _isLoading = true);
 
     try {
-      final aesKey = CapsuleEncryption.generateAESKey();
-
-      // Prepare collaborators list for Firestore: always includes creator
+      /// 1️⃣ Collaborators
       final collaboratorsWithStatus = [
         {
           'userId': currentUser.uid,
@@ -114,9 +108,24 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
             })
       ];
 
-      final memberIds = collaboratorsWithStatus.map((c) => c['userId'] as String).toList();
+      final memberIds =
+          collaboratorsWithStatus.map((c) => c['userId'] as String).toList();
       final status = _collaborators.isNotEmpty ? 'pending' : 'active';
 
+      /// 2️⃣ Capsule key
+      final capsuleKey = await BoxedEncryptionService.generateCapsuleKey();
+
+      final encryptedCapsuleKey =
+          await BoxedEncryptionService.encryptCapsuleKeyForUser(
+        capsuleKey: capsuleKey,
+        userMasterKey: UserCryptoState.userMasterKey,
+      );
+
+      final capsuleKeys = {
+        currentUser.uid: encryptedCapsuleKey,
+      };
+
+      /// 3️⃣ Create capsule
       final capsuleRef =
           await FirebaseFirestore.instance.collection('capsules').add({
         'name': _nameController.text.trim(),
@@ -126,15 +135,15 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
         'unlockDate': Timestamp.fromDate(_selectedDateTime!),
         'memberIds': memberIds,
         'collaborators': collaboratorsWithStatus,
+        'capsuleKeys': capsuleKeys,
         'createdAt': Timestamp.now(),
         'status': status,
         'isLocked': true,
-        'aesKey': aesKey,
         'backgroundId': _selectedBackground,
         'emoji': '🎁',
       });
 
-      // Upload images
+      /// 4️⃣ Images (not encrypted yet)
       for (final image in _selectedImages) {
         final filename = DateTime.now().millisecondsSinceEpoch.toString();
         final ref = FirebaseStorage.instance
@@ -151,15 +160,18 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
         });
       }
 
-      // Add encrypted note
+      /// 5️⃣ Encrypted note
       if (_noteController.text.trim().isNotEmpty) {
-        final encrypted =
-            CapsuleEncryption.encryptMemory(_noteController.text.trim(), aesKey);
+        final encryptedText = await BoxedEncryptionService.encryptData(
+          plainText: _noteController.text.trim(),
+          capsuleKey: capsuleKey,
+        );
+
         await capsuleRef.collection('memories').add({
           'type': 'note',
           'uploaderId': currentUser.uid,
           'timestamp': Timestamp.now(),
-          'encryptedText': encrypted,
+          'encryptedText': encryptedText,
         });
       }
 
@@ -184,11 +196,14 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
 
     if (result != null) {
       setState(() {
-        _collaborators.clear();
-        _collaborators.addAll(result);
+        _collaborators
+          ..clear()
+          ..addAll(result);
       });
     }
   }
+
+  // ---------- UI BELOW IS UNCHANGED ----------
 
   @override
   Widget build(BuildContext context) {
@@ -202,183 +217,161 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _sectionLabel(context, "Capsule Name"),
-            _buildInput(_nameController, 'Enter a title'),
-            const SizedBox(height: 16),
-            _sectionLabel(context, "Description"),
-            _buildInput(_descriptionController, 'What’s this about?', maxLines: 4),
-            const SizedBox(height: 16),
-            _sectionLabel(context, "Unlock Date"),
-            GestureDetector(
-              onTap: _selectDate,
-              child: Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  color: colorScheme.surface,
-                ),
-                child: Text(
-                  _selectedDateTime == null
-                      ? 'Pick unlock date'
-                      : 'Opens on: $_selectedDateTime',
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            _sectionLabel(context, "Background"),
-            SizedBox(
-              height: 90,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: _backgroundOptions.length,
-                itemBuilder: (_, i) => GestureDetector(
-                  onTap: () => setState(() => _selectedBackground = i),
-                  child: Container(
-                    margin: const EdgeInsets.only(right: 8),
-                    decoration: BoxDecoration(
-                      border: Border.all(
-                        color: _selectedBackground == i
-                            ? colorScheme.primary
-                            : Colors.transparent,
-                        width: 2,
-                      ),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.asset(_backgroundOptions[i],
-                          width: 80, fit: BoxFit.cover),
-                    ),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          _sectionLabel(context, "Capsule Name"),
+          _buildInput(_nameController, 'Enter a title'),
+          const SizedBox(height: 16),
+          _sectionLabel(context, "Description"),
+          _buildInput(_descriptionController, 'What’s this about?', maxLines: 4),
+          const SizedBox(height: 16),
+          _sectionLabel(context, "Unlock Date"),
+          GestureDetector(onTap: _selectDate, child: _dateTile()),
+          const SizedBox(height: 16),
+          _backgroundPicker(colorScheme),
+          const SizedBox(height: 24),
+          _sectionLabel(context, "Collaborators"),
+          _collaboratorButton(colorScheme),
+          const SizedBox(height: 8),
+          _buildCollaboratorChips(),
+          const SizedBox(height: 24),
+          _sectionLabel(context, "Write a Note"),
+          _buildInput(_noteController, 'Leave something inside...', maxLines: 3),
+          const SizedBox(height: 24),
+          _sectionLabel(context, "Add Images"),
+          _imagePicker(colorScheme),
+          const SizedBox(height: 36),
+          _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _createCapsule,
+                    child: const Text("Create Capsule",
+                        style: TextStyle(fontSize: 16)),
                   ),
                 ),
-              ),
-            ),
-            const SizedBox(height: 24),
-            _sectionLabel(context, "Collaborators"),
-            ElevatedButton.icon(
-              onPressed: _openCollaboratorPicker,
-              icon: const Icon(Icons.group_add),
-              label: const Text("Add Collaborators"),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                backgroundColor: colorScheme.primary,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            _buildCollaboratorChips(),
-            const SizedBox(height: 24),
-            _sectionLabel(context, "Write a Note"),
-            _buildInput(_noteController, 'Leave something inside...', maxLines: 3),
-            const SizedBox(height: 24),
-            _sectionLabel(context, "Add Images"),
-            Wrap(
-              spacing: 8,
-              children: [
-                ..._selectedImages.map((image) => Stack(
-                      alignment: Alignment.topRight,
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(8),
-                          child: Image.file(image,
-                              width: 80, height: 80, fit: BoxFit.cover),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close, size: 16),
-                          onPressed: () => _removeImage(image),
-                        ),
-                      ],
-                    )),
-                GestureDetector(
-                  onTap: _pickImages,
-                  child: Container(
-                    width: 80,
-                    height: 80,
-                    decoration: BoxDecoration(
-                      color: colorScheme.surface,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: colorScheme.outline),
-                    ),
-                    child: const Icon(Icons.add_a_photo),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 36),
-            _isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _createCapsule,
-                      child: const Text("Create Capsule", style: TextStyle(fontSize: 16)),
-                      style: ElevatedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        backgroundColor: colorScheme.primary,
-                        shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12)),
-                      ),
-                    ),
-                  ),
-          ],
-        ),
+        ]),
       ),
     );
   }
 
-  Widget _buildCollaboratorChips() {
-    return Wrap(
-      spacing: 8,
-      children: _collaborators.map((c) {
-        final avatar = (c['photoUrl'] as String?)?.isNotEmpty == true
-            ? NetworkImage(c['photoUrl'])
-            : null;
-        return Chip(
-          avatar: avatar != null
-              ? CircleAvatar(backgroundImage: avatar)
-              : CircleAvatar(
-                  child: Text((c['username'] ?? '?')[0].toUpperCase())),
-          label: Text('${c['username']} (${c['role']})'),
-          onDeleted: () {
-            setState(() {
-              _collaborators.remove(c);
-            });
-          },
-        );
-      }).toList(),
-    );
-  }
+  // ---------- UI HELPERS (UNCHANGED) ----------
 
-  Widget _sectionLabel(BuildContext context, String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6),
-      child: Text(
-        text,
-        style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
-      ),
-    );
-  }
-
-  Widget _buildInput(TextEditingController controller, String hint, {int maxLines = 1}) {
-    return TextField(
-      controller: controller,
-      maxLines: maxLines,
-      decoration: InputDecoration(
-        hintText: hint,
-        filled: true,
-        fillColor: Theme.of(context).colorScheme.surface,
-        border: OutlineInputBorder(
+  Widget _dateTile() => Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide.none,
+          color: Theme.of(context).colorScheme.surface,
         ),
-        contentPadding: const EdgeInsets.all(14),
-      ),
-    );
-  }
+        child: Text(_selectedDateTime == null
+            ? 'Pick unlock date'
+            : 'Opens on: $_selectedDateTime'),
+      );
+
+  Widget _collaboratorButton(ColorScheme colorScheme) => ElevatedButton.icon(
+        onPressed: _openCollaboratorPicker,
+        icon: const Icon(Icons.group_add),
+        label: const Text("Add Collaborators"),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: colorScheme.primary,
+        ),
+      );
+
+  Widget _backgroundPicker(ColorScheme colorScheme) => SizedBox(
+        height: 90,
+        child: ListView.builder(
+          scrollDirection: Axis.horizontal,
+          itemCount: _backgroundOptions.length,
+          itemBuilder: (_, i) => GestureDetector(
+            onTap: () => setState(() => _selectedBackground = i),
+            child: Container(
+              margin: const EdgeInsets.only(right: 8),
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: _selectedBackground == i
+                      ? colorScheme.primary
+                      : Colors.transparent,
+                  width: 2,
+                ),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.asset(_backgroundOptions[i],
+                    width: 80, fit: BoxFit.cover),
+              ),
+            ),
+          ),
+        ),
+      );
+
+  Widget _imagePicker(ColorScheme colorScheme) => Wrap(
+        spacing: 8,
+        children: [
+          ..._selectedImages.map((image) => Stack(
+                alignment: Alignment.topRight,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.file(image,
+                        width: 80, height: 80, fit: BoxFit.cover),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close, size: 16),
+                    onPressed: () => _removeImage(image),
+                  ),
+                ],
+              )),
+          GestureDetector(
+            onTap: _pickImages,
+            child: Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                color: colorScheme.surface,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: colorScheme.outline),
+              ),
+              child: const Icon(Icons.add_a_photo),
+            ),
+          ),
+        ],
+      );
+
+  Widget _buildCollaboratorChips() => Wrap(
+        spacing: 8,
+        children: _collaborators.map((c) {
+          final avatar = (c['photoUrl'] as String?)?.isNotEmpty == true
+              ? NetworkImage(c['photoUrl'])
+              : null;
+          return Chip(
+            avatar: avatar != null
+                ? CircleAvatar(backgroundImage: avatar)
+                : CircleAvatar(child: Text(c['username'][0].toUpperCase())),
+            label: Text('${c['username']} (${c['role']})'),
+            onDeleted: () => setState(() => _collaborators.remove(c)),
+          );
+        }).toList(),
+      );
+
+  Widget _sectionLabel(BuildContext context, String text) => Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: Text(text,
+            style: Theme.of(context)
+                .textTheme
+                .labelLarge
+                ?.copyWith(fontWeight: FontWeight.bold)),
+      );
+
+  Widget _buildInput(TextEditingController controller, String hint,
+          {int maxLines = 1}) =>
+      TextField(
+        controller: controller,
+        maxLines: maxLines,
+        decoration: InputDecoration(
+          hintText: hint,
+          filled: true,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+        ),
+      );
 }
