@@ -74,6 +74,18 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     });
   }
 
+  /// ✅ NEW: Make sure master key exists before any encryption happens.
+  /// We cannot derive it here (no password available). So if it's missing,
+  /// user needs to log in again.
+  Future<void> _ensureUserMasterKeyReady() async {
+    final masterKey = UserCryptoState.userMasterKey;
+    if (masterKey != null) return;
+
+    throw Exception(
+      'User master key not initialized. Please log out and log back in.',
+    );
+  }
+
   Future<void> _createCapsule() async {
     final currentUser = FirebaseAuth.instance.currentUser;
 
@@ -90,6 +102,9 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     setState(() => _isLoading = true);
 
     try {
+      // ✅ NEW: Prevents "User master key not initialized" crash
+      await _ensureUserMasterKeyReady();
+
       /// 1️⃣ Collaborators
       final collaboratorsWithStatus = [
         {
@@ -108,8 +123,11 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
             })
       ];
 
-      final memberIds =
-          collaboratorsWithStatus.map((c) => c['userId'] as String).toList();
+      final memberIds = collaboratorsWithStatus
+          .where((c) => c['accepted'] == true)
+          .map((c) => c['userId'] as String)
+          .toList();
+
       final status = _collaborators.isNotEmpty ? 'pending' : 'active';
 
       /// 2️⃣ Capsule key

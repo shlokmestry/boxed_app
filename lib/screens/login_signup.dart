@@ -1,11 +1,13 @@
+import 'dart:math';
+
 import 'package:boxed_app/widgets/buttons.dart';
 import 'package:boxed_app/screens/choose_username_screen.dart';
 import 'package:flutter/material.dart';
-import 'home_screen.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
-import 'dart:math';
+
+import 'home_screen.dart';
 import 'package:boxed_app/services/boxed_encryption_service.dart';
 import 'package:boxed_app/state/user_crypto_state.dart';
 
@@ -44,8 +46,8 @@ class _LoginSignupState extends State<LoginSignup> {
   }
 
   void _logFcmToken() async {
-    String? token = await FirebaseMessaging.instance.getToken();
-    print('📱 FCM Token: $token');
+    final token = await FirebaseMessaging.instance.getToken();
+    debugPrint('📱 FCM Token: $token');
   }
 
   void _showFieldErrors({String? emailMsg, String? passwordMsg}) {
@@ -92,6 +94,7 @@ class _LoginSignupState extends State<LoginSignup> {
               ),
               const SizedBox(height: 25),
 
+              // Email
               TextField(
                 controller: emailController,
                 onChanged: (_) {
@@ -108,8 +111,10 @@ class _LoginSignupState extends State<LoginSignup> {
                   ),
                 ),
               ),
+
               const SizedBox(height: 10),
 
+              // Password
               TextField(
                 controller: passwordController,
                 obscureText: obscurePassword,
@@ -136,6 +141,7 @@ class _LoginSignupState extends State<LoginSignup> {
                   ),
                 ),
               ),
+
               const SizedBox(height: 20),
 
               Buttons(
@@ -186,9 +192,14 @@ class _LoginSignupState extends State<LoginSignup> {
       if (isLogin) {
         // ---------------- LOGIN ----------------
         final credential = await FirebaseAuth.instance
-            .signInWithEmailAndPassword(email: email, password: password);
+            .signInWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
 
         final user = credential.user!;
+
+        // Fetch encryption salt
         final userDoc = await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
@@ -198,6 +209,7 @@ class _LoginSignupState extends State<LoginSignup> {
         if (salt == null) {
           throw Exception('Encryption salt missing for user');
         }
+
 
         final masterKey = await BoxedEncryptionService.deriveUserMasterKey(
           password: password,
@@ -212,14 +224,20 @@ class _LoginSignupState extends State<LoginSignup> {
       } else {
         // ---------------- SIGN UP ----------------
         final credential = await FirebaseAuth.instance
-            .createUserWithEmailAndPassword(email: email, password: password);
+            .createUserWithEmailAndPassword(
+          email: email,
+          password: password,
+        );
 
         final user = credential.user!;
         final encryptionSalt = _generateEncryptionSalt();
         final usernameBase = user.email!.split('@')[0];
         final displayName = _capitalize(usernameBase);
 
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
+        await FirebaseFirestore.instance
+            .collection('users')
+            .doc(user.uid)
+            .set({
           'displayName': displayName,
           'email': user.email,
           'email_lowercase': email,
@@ -230,9 +248,20 @@ class _LoginSignupState extends State<LoginSignup> {
           'darkMode': false,
         }, SetOptions(merge: true));
 
+        
+        final masterKey = await BoxedEncryptionService.deriveUserMasterKey(
+          password: password,
+          userId: user.uid,
+          salt: encryptionSalt,
+        );
+
+        UserCryptoState.setUserMasterKey(masterKey);
+
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const ChooseUsernameScreen()),
+          MaterialPageRoute(
+            builder: (_) => const ChooseUsernameScreen(),
+          ),
         );
         return;
       }
@@ -242,7 +271,10 @@ class _LoginSignupState extends State<LoginSignup> {
         await FirebaseFirestore.instance
             .collection('users')
             .doc(currentUser.uid)
-            .set({'lastLogin': Timestamp.now()}, SetOptions(merge: true));
+            .set(
+          {'lastLogin': Timestamp.now()},
+          SetOptions(merge: true),
+        );
       }
     } catch (e) {
       _showFieldErrors(emailMsg: e.toString());
