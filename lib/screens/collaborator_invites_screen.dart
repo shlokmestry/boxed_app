@@ -1,10 +1,9 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:rxdart/rxdart.dart';
 
+import '../services/collaboration_service.dart';
 import 'capsule_detail_screen.dart';
-import '../services/capsule_service.dart';
 
 class CollaboratorInvitesScreen extends StatefulWidget {
   const CollaboratorInvitesScreen({super.key});
@@ -14,74 +13,62 @@ class CollaboratorInvitesScreen extends StatefulWidget {
       _CollaboratorInvitesScreenState();
 }
 
-class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
-  User? currentUser = FirebaseAuth.instance.currentUser;
+class _CollaboratorInvitesScreenState
+    extends State<CollaboratorInvitesScreen> {
+  final User? currentUser = FirebaseAuth.instance.currentUser;
+  final CollaborationService _collaborationService =
+      CollaborationService();
+
   bool _isLoading = false;
 
+  Stream<QuerySnapshot> _pendingInvitesStream() {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) {
+      return const Stream.empty();
+    }
 
-
-  Stream<List<QueryDocumentSnapshot>> _pendingInvitesStream() {
-    return FirebaseAuth.instance.authStateChanges().switchMap((user) {
-      if (user == null) {
-        return const Stream<List<QueryDocumentSnapshot>>.empty();
-      }
-
-      return FirebaseFirestore.instance
-          .collection('capsules')
-          .where('status', isEqualTo: 'pending')
-          .where('memberIds', arrayContains: user.uid)
-          .snapshots()
-          .map((snapshot) {
-        return snapshot.docs.where((doc) {
-          final data = doc.data() as Map<String, dynamic>;
-          final collaborators =
-              (data['collaborators'] as List?) ?? [];
-
-          final myCollab = collaborators
-              .cast<Map<String, dynamic>>()
-              .firstWhere(
-                (c) => c['uid'] == user.uid,
-                orElse: () => {},
-              );
-
-          return myCollab.isNotEmpty && myCollab['accepted'] == false;
-        }).toList();
-      });
-    });
+    return FirebaseFirestore.instance
+        .collection('collaboration_requests')
+        .where('toUserId', isEqualTo: uid)
+        .where('status', isEqualTo: 'pending')
+        .snapshots();
   }
 
-  
-
   Future<void> _acceptInvite(
-    BuildContext context,
-    QueryDocumentSnapshot capsuleDoc,
-  ) async {
-    final bool? editNow = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Edit Capsule'),
-        content: const Text(
-          'You accepted the invite. Do you want to edit this capsule now?',
+  BuildContext context,
+  String requestId,
+  String capsuleId,
+  bool isViewerRole,
+) async {
+
+   final bool? editNow = isViewerRole
+    ? false
+    : await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Edit Capsule'),
+          content: const Text(
+            'You accepted the invite. Do you want to edit this capsule now?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Later'),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Edit now'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Later'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Edit now'),
-          ),
-        ],
-      ),
-    );
+      );
+
 
     setState(() => _isLoading = true);
 
     try {
-      await CapsuleService.acceptInvite(
-        capsuleDoc.id,
-        currentUser!.uid,
+      await _collaborationService.acceptRequest(
+        requestId: requestId,
       );
 
       if (!context.mounted) return;
@@ -95,7 +82,7 @@ class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
           context,
           MaterialPageRoute(
             builder: (_) =>
-                CapsuleDetailScreen(capsuleId: capsuleDoc.id),
+                CapsuleDetailScreen(capsuleId: capsuleId),
           ),
         );
       }
@@ -112,18 +99,16 @@ class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
     }
   }
 
-
-
   Future<void> _declineInvite(
     BuildContext context,
-    QueryDocumentSnapshot capsuleDoc,
+    String requestId,
   ) async {
     final bool? confirm = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (_) => AlertDialog(
         title: const Text('Decline invite?'),
         content: const Text(
-          'Declining will permanently delete this capsule for everyone.',
+          'Declining will permanently delete this capsule.',
         ),
         actions: [
           TextButton(
@@ -146,7 +131,9 @@ class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await CapsuleService.declineInvite(capsuleDoc.id);
+      await _collaborationService.declineRequest(
+        requestId: requestId,
+      );
 
       if (!context.mounted) return;
 
@@ -166,17 +153,13 @@ class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
     }
   }
 
-  
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Collaborators'),
-      ),
+      appBar: AppBar(title: const Text('Collaborators')),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
-          : StreamBuilder<List<QueryDocumentSnapshot>>(
+          : StreamBuilder<QuerySnapshot>(
               stream: _pendingInvitesStream(),
               builder: (context, snapshot) {
                 if (snapshot.connectionState ==
@@ -185,92 +168,109 @@ class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
                       child: CircularProgressIndicator());
                 }
 
-                if (snapshot.hasError) {
-                  return Center(
-                    child: Text('Error: ${snapshot.error}'),
-                  );
-                }
-
                 if (!snapshot.hasData ||
-                    snapshot.data!.isEmpty) {
+                    snapshot.data!.docs.isEmpty) {
                   return const Center(
                     child: Text('No collaboration invites'),
                   );
                 }
 
-                final docs = snapshot.data!;
+                final requests = snapshot.data!.docs;
 
                 return ListView.builder(
                   padding: const EdgeInsets.all(16),
-                  itemCount: docs.length,
+                  itemCount: requests.length,
                   itemBuilder: (context, index) {
-                    final data =
-                        docs[index].data() as Map<String, dynamic>;
+                    final request =
+                        requests[index].data()
+                            as Map<String, dynamic>;
 
-                    final capsuleTitle =
-                        data['name'] ?? 'Untitled Capsule';
+                    final requestId = requests[index].id;
+                    final capsuleId =
+                        request['capsuleDraftId'] as String;
+                    final fromUserId =
+                        request['fromUserId'] as String;
+                    final inviterName = (request['fromUserName'] ?? 'Someone') as String;
+final role = (request['role'] ?? 'editor') as String;
+final isViewer = role == 'viewer';
 
-                    return Card(
-                      margin:
-                          const EdgeInsets.only(bottom: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius:
-                            BorderRadius.circular(12),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.all(16),
-                        child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'You’ve been invited to collaborate on:',
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .bodyLarge
-                                  ?.copyWith(
-                                    fontWeight:
-                                        FontWeight.bold,
-                                  ),
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              capsuleTitle,
-                              style: Theme.of(context)
-                                  .textTheme
-                                  .titleMedium,
-                            ),
-                            const SizedBox(height: 16),
-                            Row(
+
+                    return FutureBuilder<DocumentSnapshot>(
+                      future: FirebaseFirestore.instance
+                          .collection('capsules')
+                          .doc(capsuleId)
+                          .get(),
+                      builder: (context, snap) {
+                        if (!snap.hasData) {
+                          return const SizedBox();
+                        }
+
+                        final capsule =
+                            snap.data!.data()
+                                as Map<String, dynamic>;
+
+                        return Card(
+                          margin:
+                              const EdgeInsets.only(bottom: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius:
+                                BorderRadius.circular(12),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              crossAxisAlignment:
+                                  CrossAxisAlignment.start,
                               children: [
-                                Expanded(
-                                  child: OutlinedButton(
-                                    onPressed: () =>
-                                        _declineInvite(
-                                      context,
-                                      docs[index],
-                                    ),
-                                    child:
-                                        const Text('Decline'),
-                                  ),
+                                Text(
+                                  capsule['name'] ??
+                                      'Untitled Capsule',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .titleMedium
+                                      ?.copyWith(
+                                        fontWeight:
+                                            FontWeight.bold,
+                                      ),
                                 ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: ElevatedButton(
-                                    onPressed: () =>
-                                        _acceptInvite(
-                                      context,
-                                      docs[index],
+                                const SizedBox(height: 6),
+                                Text(
+                                  'Invited by  $inviterName',
+                                  style: Theme.of(context)
+                                      .textTheme
+                                      .bodySmall,
+                                ),
+                                const SizedBox(height: 16),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton(
+                                        onPressed: () =>
+                                            _declineInvite(
+                                          context,
+                                          requestId,
+                                        ),
+                                        child: const Text(
+                                            'Decline'),
+                                      ),
                                     ),
-                                    child:
-                                        const Text('Accept'),
-                                  ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: ElevatedButton(
+                                        onPressed: () =>
+                                           _acceptInvite(context, requestId, capsuleId, isViewer),
+
+                                        child: const Text(
+                                            'Accept'),
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
-                          ],
-                        ),
-                      ),
+                          ),
+                        );
+                      },
                     );
                   },
                 );

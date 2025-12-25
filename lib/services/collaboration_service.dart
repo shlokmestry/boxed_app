@@ -8,39 +8,38 @@ class CollaborationService {
   String get _uid => _auth.currentUser!.uid;
 
   /// Accept a collaboration request
-  Future<void> acceptRequest({
-    required String requestId,
-  }) async {
-    final requestRef =
-        _firestore.collection('collaboration_requests').doc(requestId);
+  Future<void> acceptRequest({required String requestId}) async {
+  final requestRef =
+      _firestore.collection('collaboration_requests').doc(requestId);
 
-    await _firestore.runTransaction((transaction) async {
-      final requestSnap = await transaction.get(requestRef);
+  await _firestore.runTransaction((tx) async {
+    final requestSnap = await tx.get(requestRef);
+    if (!requestSnap.exists) {
+      throw Exception('Request not found');
+    }
 
-      if (!requestSnap.exists) {
-        throw Exception('Request not found');
-      }
+    final data = requestSnap.data()!;
+    if (data['toUserId'] != _uid) {
+      throw Exception('Not authorized');
+    }
 
-      final data = requestSnap.data()!;
-      if (data['toUserId'] != _uid) {
-        throw Exception('Not authorized');
-      }
+    final capsuleId = data['capsuleDraftId'] as String;
+    final capsuleRef = _firestore.collection('capsules').doc(capsuleId);
 
-      final capsuleRef =
-          _firestore.collection('capsules').doc(data['capsuleDraftId']);
-
-      // Activate capsule
-      transaction.update(capsuleRef, {
-        'status': 'active',
-        'updatedAt': FieldValue.serverTimestamp(),
-      });
-
-      // Mark request accepted
-      transaction.update(requestRef, {
-        'status': 'accepted',
-      });
+    // mark request accepted
+    tx.update(requestRef, {
+      'status': 'accepted',
+      'respondedAt': FieldValue.serverTimestamp(),
     });
-  }
+
+    // activate capsule immediately (so editing works)
+    tx.update(capsuleRef, {
+      'status': 'active',
+      'updatedAt': FieldValue.serverTimestamp(),
+    });
+  });
+}
+
 
   /// Decline a collaboration request
   Future<void> declineRequest({

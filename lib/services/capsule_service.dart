@@ -10,141 +10,102 @@ class CapsuleService {
   static final CollectionReference _capsules =
       _firestore.collection('capsules');
 
-
-  static Future<void> createEncryptedCapsule({
+  /// Creates an encrypted capsule.
+  /// If [collaboratorUserId] is provided, capsule starts as `pending`
+  /// and a collaboration request must be created separately.
+  static Future<String> createEncryptedCapsule({
     required String creatorId,
     required String name,
     required String description,
     required DateTime unlockDate,
-    required List<String> memberIds, // including creator
-    required bool hasCollaborators,
+    required List<String> collaboratorIds,
+    bool isSurprise = false,
   }) async {
     try {
-      final capsuleId = _capsules.doc().id;
+      final capsuleRef = _capsules.doc();
+      final capsuleId = capsuleRef.id;
 
       // Master key (already initialized at login)
       final SecretKey userMasterKey =
           UserCryptoState.userMasterKey;
 
-          
-
       // Generate one capsule key
       final SecretKey capsuleKey =
           await BoxedEncryptionService.generateCapsuleKey();
 
-      // Encrypt capsule key for each member
-      final Map<String, String> capsuleKeys = {};
-      for (final uid in memberIds) {
+      // Encrypt capsule key for each collaborator
+      final Map<String, String> encryptedCapsuleKeys = {};
+      for (final uid in collaboratorIds) {
         final encryptedKey =
             await BoxedEncryptionService.encryptCapsuleKeyForUser(
           capsuleKey: capsuleKey,
           userMasterKey: userMasterKey,
         );
-        capsuleKeys[uid] = encryptedKey;
+        encryptedCapsuleKeys[uid] = encryptedKey;
       }
 
-      // Build collaborator list
-      final List<Map<String, dynamic>> collaborators =
-          memberIds.map((uid) {
-        return {
-          'uid': uid,
-          'accepted': uid == creatorId ? true : !hasCollaborators,
-        };
-      }).toList();
-
-      await _capsules.doc(capsuleId).set({
-        'capsuleId': capsuleId,
+      await capsuleRef.set({
         'name': name,
         'description': description,
         'creatorId': creatorId,
+        'collaboratorIds': collaboratorIds,
+        'roles': {
+          for (final uid in collaboratorIds) uid: 'editor',
+        },
         'unlockDate': Timestamp.fromDate(unlockDate.toUtc()),
-        'memberIds': memberIds,
-        'capsuleKeys': capsuleKeys,
-        'collaborators': collaborators,
-        'createdAt': Timestamp.fromDate(DateTime.now().toUtc()),
-        'status': hasCollaborators ? 'pending' : 'locked',
+        'capsuleKeys': encryptedCapsuleKeys,
+        'status': collaboratorIds.length > 1 ? 'pending' : 'active',
+        'isSurprise': isSurprise,
+        'createdAt': FieldValue.serverTimestamp(),
+        'updatedAt': FieldValue.serverTimestamp(),
       });
 
-      print("Capsule '$name' created ($capsuleId)");
+      return capsuleId;
     } catch (e, st) {
-      print("Error creating capsule: $e");
+      print('Error creating encrypted capsule: $e');
       print(st);
       rethrow;
     }
   }
 
-  static Future<void> acceptInvite(
-    String capsuleId,
-    String userId,
-  ) async {
-    final ref = _capsules.doc(capsuleId);
-
-    await _firestore.runTransaction((tx) async {
-      final snap = await tx.get(ref);
-      if (!snap.exists) {
-        throw Exception('Capsule does not exist');
-      }
-
-      final data = snap.data() as Map<String, dynamic>;
-      final List<Map<String, dynamic>> collaborators =
-          List<Map<String, dynamic>>.from(data['collaborators']);
-
-      for (final c in collaborators) {
-        if (c['uid'] == userId) {
-          c['accepted'] = true;
-        }
-      }
-
-      final bool allAccepted =
-          collaborators.every((c) => c['accepted'] == true);
-
-      tx.update(ref, {
-        'collaborators': collaborators,
-        'status': allAccepted ? 'locked' : 'pending',
-      });
-    });
-  }
-
-  static Future<void> declineInvite(String capsuleId) async {
-    // Business rule: any decline deletes capsule
-    await _capsules.doc(capsuleId).delete();
-  }
-
-
-
+  /// Automatically unlock capsules when the unlock date has passed.
+  /// Called on app open / resume.
   static Future<void> autoUnlockExpiredCapsules(
     String userId,
   ) async {
     final now = Timestamp.now();
 
     final query = await _capsules
-        .where('memberIds', arrayContains: userId)
-        .where('status', isEqualTo: 'locked')
+        .where('collaboratorIds', arrayContains: userId)
+        .where('status', isEqualTo: 'active')
         .where('unlockDate', isLessThanOrEqualTo: now)
         .get();
 
     for (final doc in query.docs) {
       await doc.reference.update({
         'status': 'unlocked',
+        'updatedAt': FieldValue.serverTimestamp(),
       });
     }
   }
 
-
-
+  /// Fetch all capsules visible to the user
   static Future<List<Map<String, dynamic>>> fetchUserCapsules(
     String userId,
   ) async {
     try {
       final querySnapshot = await _capsules
-          .where('memberIds', arrayContains: userId)
+          .where('collaboratorIds', arrayContains: userId)
           .get();
 
       return querySnapshot.docs
-          .map((doc) => doc.data() as Map<String, dynamic>)
+          .map((doc) => {
+                'id': doc.id,
+                ...doc.data() as Map<String, dynamic>,
+              })
           .toList();
     } catch (e, st) {
-      print("Error fetching user capsules: $e");
+      print('Error fetching user capsules: $e');
       print(st);
       return [];
     }

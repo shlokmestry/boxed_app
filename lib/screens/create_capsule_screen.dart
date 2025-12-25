@@ -191,15 +191,16 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
         for (final c in _collaborators) {
           final toUserId = c['userId'] as String;
           final reqRef = firestore.collection('collaboration_requests').doc();
+batch.set(reqRef, {
+  'capsuleDraftId': capsuleId,
+  'fromUserId': user.uid,
+  'fromUserName': user.displayName ?? 'Someone',
+  'toUserId': toUserId,
+  'role': (c['role'] ?? 'editor').toString().toLowerCase(),
+  'status': 'pending',
+  'createdAt': FieldValue.serverTimestamp(),
+});
 
-          batch.set(reqRef, {
-            'capsuleDraftId': capsuleId,
-            'fromUserId': user.uid,
-            'toUserId': toUserId,
-            'role': (c['role'] ?? 'editor').toString().toLowerCase(),
-            'status': 'pending',
-            'createdAt': FieldValue.serverTimestamp(),
-          });
         }
         await batch.commit();
       }

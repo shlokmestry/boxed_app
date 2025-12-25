@@ -59,16 +59,23 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             )
           : StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('capsules')
-                  .where('memberIds', arrayContains: user.uid)
-                  .orderBy('createdAt', descending: true)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
+  stream: FirebaseFirestore.instance
+      .collection('capsules')
+      .where('collaboratorIds', arrayContains: user.uid)
+      .where('status', whereIn: ['pending', 'active', 'unlocked'])
+      .snapshots(),
+  builder: (context, snapshot) {
+    if (snapshot.connectionState == ConnectionState.waiting) {
+      return const Center(child: CircularProgressIndicator());
+    }
 
+    if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+      return const Center(
+        child: Text('No capsules yet'),
+      );
+    }
+
+    final capsules = snapshot.data!.docs;
                 // Filter out capsules with status "declined"
                 final docs = snapshot.data!.docs.where((doc) {
                   final data = doc.data() as Map<String, dynamic>;

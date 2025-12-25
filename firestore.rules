@@ -3,49 +3,173 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ─────────────────────────────────────────────
-    // CAPSULES
-    // ─────────────────────────────────────────────
+    /* ─────────────────────────────────────────────
+       Helper functions
+    ───────────────────────────────────────────── */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isCreator(capsule) {
+      return request.auth.uid == capsule.data.creatorId;
+    }
+
+    function isCollaborator(capsule) {
+      return request.auth.uid in capsule.data.collaboratorIds;
+    }
+
+    function isUnlocked(capsule) {
+      return capsule.data.unlockDate <= request.time;
+    }
+
+    function validInitialStatus() {
+      return request.resource.data.status in ["pending", "active"];
+    }
+
+    function validStatusTransition(oldStatus, newStatus) {
+      return (
+        // pending → active
+        (oldStatus == "pending" && newStatus == "active") ||
+
+        // active → unlocked
+        (oldStatus == "active" && newStatus == "unlocked") ||
+
+        // any → deleted (soft delete)
+        (newStatus == "deleted") ||
+
+        // metadata update without status change
+        (oldStatus == newStatus)
+      );
+    }
+
+    /* ─────────────────────────────────────────────
+       USERS
+    ───────────────────────────────────────────── */
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    /* ─────────────────────────────────────────────
+       CAPSULES
+    ───────────────────────────────────────────── */
     match /capsules/{capsuleId} {
 
-      // READ: only members, only after unlock
-      allow read: if request.auth != null
-        && request.auth.uid in resource.data.memberIds
+      /*
+        READ:
+        - Creator can read pending capsules
+        - Collaborators can read active/unlocked capsules
+      */
+      allow read: if isSignedIn()
         && (
-          resource.data.status == 'unlocked' ||
-          request.time < resource.data.unlockDate
+          (resource.data.status == "pending" && isCreator(resource))
+          || isCollaborator(resource)
         );
 
-      // CREATE: creator only
-      allow create: if request.auth != null
+      /*
+        CREATE:
+        - Signed-in user
+        - Creator must be collaborator
+        - Status must be pending OR active
+      */
+      allow create: if isSignedIn()
         && request.resource.data.creatorId == request.auth.uid
-        && request.auth.uid in request.resource.data.memberIds
-        && request.resource.data.status in ['pending', 'locked'];
+        && request.auth.uid in request.resource.data.collaboratorIds
+        && validInitialStatus();
 
-      // UPDATE:
-      allow update: if request.auth != null
-        && (
-          // Creator can manage capsule until unlock
-          (
-            request.auth.uid == resource.data.creatorId
-            && request.time < resource.data.unlockDate
-          )
+      /*
+        UPDATE:
+        - Collaborators only
+        - No updates after deletion
+        - Status transitions must be valid
+      */
+     allow update: if isSignedIn()
+  && isCollaborator(resource)
+  && resource.data.roles[request.auth.uid] == "editor"
+  && resource.data.status != "deleted";
 
-          ||
-
-          // Collaborator can accept invite only
-          (
-            request.auth.uid in resource.data.memberIds
-            && request.resource.data
-              .diff(resource.data)
-              .changedKeys()
-              .hasOnly(['collaborators', 'status'])
-          )
+        && validStatusTransition(
+          resource.data.status,
+          request.resource.data.status
         );
 
-      // DELETE: any member can delete (decline flow)
-      allow delete: if request.auth != null
-        && request.auth.uid in resource.data.memberIds;
+      /*
+        DELETE:
+        - No hard deletes from client
+      */
+      allow delete: if false;
+    }
+
+    /* ─────────────────────────────────────────────
+       MEMORIES (SUBCOLLECTION)
+    ───────────────────────────────────────────── */
+    match /capsules/{capsuleId}/memories/{memoryId} {
+
+      /*
+        CREATE:
+        - Only collaborators
+        - Only when capsule is active
+      */
+      allow create: if isSignedIn()
+  && isCollaborator(get(/databases/$(database)/documents/capsules/$(capsuleId)))
+  && get(/databases/$(database)/documents/capsules/$(capsuleId)).data.status == "active"
+  && get(/databases/$(database)/documents/capsules/$(capsuleId)).data.roles[request.auth.uid] == "editor";
+
+
+      /*
+        READ:
+        - Only collaborators
+        - Only after unlock
+      */
+      allow read: if isSignedIn()
+        && isCollaborator(
+          get(/databases/$(database)/documents/capsules/$(capsuleId))
+        )
+        && isUnlocked(
+          get(/databases/$(database)/documents/capsules/$(capsuleId))
+        );
+
+      /*
+        UPDATE / DELETE:
+        - Not allowed in MVP
+      */
+      allow update, delete: if false;
+    }
+
+    /* ─────────────────────────────────────────────
+       COLLABORATION REQUESTS
+    ───────────────────────────────────────────── */
+    match /collaboration_requests/{requestId} {
+
+      /*
+        READ:
+        - Sender or recipient only
+      */
+      allow read: if isSignedIn()
+        && (
+          request.auth.uid == resource.data.fromUserId
+          || request.auth.uid == resource.data.toUserId
+        );
+
+      /*
+        CREATE:
+        - Sender must be authenticated
+      */
+      allow create: if isSignedIn()
+        && request.auth.uid == request.resource.data.fromUserId;
+
+      /*
+        UPDATE:
+        - Only recipient can accept/decline
+      */
+      allow update: if isSignedIn()
+        && request.auth.uid == resource.data.toUserId;
+
+      /*
+        DELETE:
+        - No client-side delete
+      */
+      allow delete: if false;
     }
   }
 }
