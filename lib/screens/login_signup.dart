@@ -27,6 +27,9 @@ class _LoginSignupState extends State<LoginSignup> {
   String? emailError;
   String? passwordError;
 
+  // ─────────────────────────────────────────────
+  // Encryption salt generator (signup only)
+  // ─────────────────────────────────────────────
   String _generateEncryptionSalt() {
     final rand = Random.secure();
     final bytes = List<int>.generate(32, (_) => rand.nextInt(256));
@@ -38,6 +41,13 @@ class _LoginSignupState extends State<LoginSignup> {
     super.initState();
     _requestNotificationPermission();
     _logFcmToken();
+  }
+
+  @override
+  void dispose() {
+    emailController.dispose();
+    passwordController.dispose();
+    super.dispose();
   }
 
   void _requestNotificationPermission() async {
@@ -97,7 +107,9 @@ class _LoginSignupState extends State<LoginSignup> {
               TextField(
                 controller: emailController,
                 onChanged: (_) {
-                  if (emailError != null) setState(() => emailError = null);
+                  if (emailError != null) {
+                    setState(() => emailError = null);
+                  }
                 },
                 decoration: InputDecoration(
                   hintText: 'Email',
@@ -118,7 +130,9 @@ class _LoginSignupState extends State<LoginSignup> {
                 controller: passwordController,
                 obscureText: obscurePassword,
                 onChanged: (_) {
-                  if (passwordError != null) setState(() => passwordError = null);
+                  if (passwordError != null) {
+                    setState(() => passwordError = null);
+                  }
                 },
                 decoration: InputDecoration(
                   hintText: 'Password',
@@ -183,13 +197,16 @@ class _LoginSignupState extends State<LoginSignup> {
     );
   }
 
+  // ─────────────────────────────────────────────
+  // AUTH LOGIC
+  // ─────────────────────────────────────────────
   Future<void> _handleAuth() async {
     final email = emailController.text.trim().toLowerCase();
     final password = passwordController.text.trim();
 
     try {
       if (isLogin) {
-        // ---------------- LOGIN ----------------
+        // ───────── LOGIN ─────────
         final credential = await FirebaseAuth.instance
             .signInWithEmailAndPassword(
           email: email,
@@ -198,7 +215,7 @@ class _LoginSignupState extends State<LoginSignup> {
 
         final user = credential.user!;
 
-        // 🔐 Initialize crypto EXACTLY ONCE here
+        // 🔐 Initialize master key (Option A)
         await UserCryptoState.initializeForUser(
           userId: user.uid,
           password: password,
@@ -207,7 +224,7 @@ class _LoginSignupState extends State<LoginSignup> {
         final hasUsername = await _userHasUsername(user.uid);
         _navigateAccordingToUsername(hasUsername);
       } else {
-        // ---------------- SIGN UP ----------------
+        // ───────── SIGN UP ─────────
         final credential = await FirebaseAuth.instance
             .createUserWithEmailAndPassword(
           email: email,
@@ -233,6 +250,12 @@ class _LoginSignupState extends State<LoginSignup> {
           'darkMode': false,
         }, SetOptions(merge: true));
 
+        // 🔐 IMPORTANT: initialize master key immediately after signup
+        await UserCryptoState.initializeForUser(
+          userId: user.uid,
+          password: password,
+        );
+
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -242,6 +265,7 @@ class _LoginSignupState extends State<LoginSignup> {
         return;
       }
 
+      // Update last login
       final currentUser = FirebaseAuth.instance.currentUser;
       if (currentUser != null) {
         await FirebaseFirestore.instance

@@ -3,8 +3,8 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cryptography/cryptography.dart';
 
 class BoxedEncryptionService {
-  static final _aesGcm = AesGcm.with256bits();
-  static final _pbkdf2 = Pbkdf2(
+  static final AesGcm _aesGcm = AesGcm.with256bits();
+  static final Pbkdf2 _pbkdf2 = Pbkdf2(
     macAlgorithm: Hmac.sha256(),
     iterations: 100000,
     bits: 256,
@@ -30,7 +30,7 @@ class BoxedEncryptionService {
 
     final salt = data['encryptionSalt'] as String;
 
-    return await _pbkdf2.deriveKey(
+    return _pbkdf2.deriveKey(
       secretKey: SecretKey(utf8.encode(password)),
       nonce: utf8.encode('$userId:$salt'),
     );
@@ -73,11 +73,43 @@ class BoxedEncryptionService {
   }
 
   // ─────────────────────────────────────────────
+  // MEMORY / NOTE ENCRYPTION
+  // ─────────────────────────────────────────────
+
+  static Future<String> encryptData({
+    required String plainText,
+    required SecretKey capsuleKey,
+  }) async {
+    final secretBox = await _aesGcm.encrypt(
+      utf8.encode(plainText),
+      secretKey: capsuleKey,
+    );
+
+    return _encodeSecretBox(secretBox);
+  }
+
+  static Future<String> decryptData({
+    required String encryptedText,
+    required SecretKey capsuleKey,
+  }) async {
+    final secretBox = _decodeSecretBox(encryptedText);
+
+    final clearBytes = await _aesGcm.decrypt(
+      secretBox,
+      secretKey: capsuleKey,
+    );
+
+    return utf8.decode(clearBytes);
+  }
+
+  // ─────────────────────────────────────────────
   // HELPERS
   // ─────────────────────────────────────────────
 
+  /// Encodes a SecretBox into a single base64 string containing:
+  /// nonce + ciphertext + mac
   static String _encodeSecretBox(SecretBox box) {
-    final map = {
+    final map = <String, String>{
       'nonce': base64Encode(box.nonce),
       'cipherText': base64Encode(box.cipherText),
       'mac': base64Encode(box.mac.bytes),
@@ -90,9 +122,9 @@ class BoxedEncryptionService {
         jsonDecode(utf8.decode(base64Decode(encoded))) as Map<String, dynamic>;
 
     return SecretBox(
-      base64Decode(decoded['cipherText']),
-      nonce: base64Decode(decoded['nonce']),
-      mac: Mac(base64Decode(decoded['mac'])),
+      base64Decode(decoded['cipherText'] as String),
+      nonce: base64Decode(decoded['nonce'] as String),
+      mac: Mac(base64Decode(decoded['mac'] as String)),
     );
   }
 }
