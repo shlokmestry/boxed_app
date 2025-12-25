@@ -50,13 +50,17 @@ void showNotification(RemoteMessage message) {
   }
 }
 
-Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+Future<void> _firebaseMessagingBackgroundHandler(
+    RemoteMessage message) async {
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   debugPrint('📩 Background message received: ${message.messageId}');
 }
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
@@ -65,6 +69,7 @@ Future<void> main() async {
     _firebaseMessagingBackgroundHandler,
   );
   FirebaseMessaging.onMessage.listen(showNotification);
+
   setupFlutterNotifications();
 
   runApp(
@@ -167,9 +172,13 @@ class MyApp extends StatelessWidget {
                   final data = userDocSnapshot.data!.data()
                       as Map<String, dynamic>?;
 
-                  final hasUsername = data != null &&
+                  final hasUsername =
+                      data != null &&
                       data['username'] != null &&
-                      data['username'].toString().trim().isNotEmpty;
+                      data['username']
+                          .toString()
+                          .trim()
+                          .isNotEmpty;
 
                   return hasUsername
                       ? const HomeScreen()
