@@ -8,7 +8,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
 import 'home_screen.dart';
-import 'package:boxed_app/services/boxed_encryption_service.dart';
 import 'package:boxed_app/state/user_crypto_state.dart';
 
 class LoginSignup extends StatefulWidget {
@@ -199,25 +198,11 @@ class _LoginSignupState extends State<LoginSignup> {
 
         final user = credential.user!;
 
-        // Fetch encryption salt
-        final userDoc = await FirebaseFirestore.instance
-            .collection('users')
-            .doc(user.uid)
-            .get();
-
-        final salt = userDoc.data()?['encryptionSalt'];
-        if (salt == null) {
-          throw Exception('Encryption salt missing for user');
-        }
-
-
-        final masterKey = await BoxedEncryptionService.deriveUserMasterKey(
-          password: password,
+        // 🔐 Initialize crypto EXACTLY ONCE here
+        await UserCryptoState.initializeForUser(
           userId: user.uid,
-          salt: salt,
+          password: password,
         );
-
-        UserCryptoState.setUserMasterKey(masterKey);
 
         final hasUsername = await _userHasUsername(user.uid);
         _navigateAccordingToUsername(hasUsername);
@@ -247,15 +232,6 @@ class _LoginSignupState extends State<LoginSignup> {
           'createdAt': Timestamp.now(),
           'darkMode': false,
         }, SetOptions(merge: true));
-
-        
-        final masterKey = await BoxedEncryptionService.deriveUserMasterKey(
-          password: password,
-          userId: user.uid,
-          salt: encryptionSalt,
-        );
-
-        UserCryptoState.setUserMasterKey(masterKey);
 
         Navigator.pushReplacement(
           context,

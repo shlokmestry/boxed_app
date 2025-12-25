@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cryptography/cryptography.dart';
 
 class BoxedEncryptionService {
@@ -9,37 +10,48 @@ class BoxedEncryptionService {
     bits: 256,
   );
 
-  // ============================
-  // USER MASTER KEY (RECOVERABLE)
-  // ============================
+  // ─────────────────────────────────────────────
+  // USER MASTER KEY (DERIVED + RECOVERABLE)
+  // ─────────────────────────────────────────────
 
-  static Future<SecretKey> deriveUserMasterKey({
-    required String password,
+  static Future<SecretKey> getOrCreateUserMasterKey({
     required String userId,
-    required String salt,
+    required String password,
   }) async {
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(userId)
+        .get();
+
+    final data = userDoc.data();
+    if (data == null || data['encryptionSalt'] == null) {
+      throw Exception('Encryption salt missing for user');
+    }
+
+    final salt = data['encryptionSalt'] as String;
+
     return await _pbkdf2.deriveKey(
-      secretKey: SecretKey(password.codeUnits),
+      secretKey: SecretKey(utf8.encode(password)),
       nonce: utf8.encode('$userId:$salt'),
     );
   }
 
-  // ============================
+  // ─────────────────────────────────────────────
   // CAPSULE KEY
-  // ============================
+  // ─────────────────────────────────────────────
 
   static Future<SecretKey> generateCapsuleKey() async {
-    return await _aesGcm.newSecretKey();
+    return _aesGcm.newSecretKey();
   }
 
   static Future<String> encryptCapsuleKeyForUser({
     required SecretKey capsuleKey,
     required SecretKey userMasterKey,
   }) async {
-    final capsuleKeyBytes = await capsuleKey.extractBytes();
+    final bytes = await capsuleKey.extractBytes();
 
     final secretBox = await _aesGcm.encrypt(
-      capsuleKeyBytes,
+      bytes,
       secretKey: userMasterKey,
     );
 
@@ -60,39 +72,9 @@ class BoxedEncryptionService {
     return SecretKey(clearBytes);
   }
 
-  // ============================
-  // MEMORY ENCRYPTION
-  // ============================
-
-  static Future<String> encryptData({
-    required String plainText,
-    required SecretKey capsuleKey,
-  }) async {
-    final secretBox = await _aesGcm.encrypt(
-      utf8.encode(plainText),
-      secretKey: capsuleKey,
-    );
-
-    return _encodeSecretBox(secretBox);
-  }
-
-  static Future<String> decryptData({
-    required String encryptedData,
-    required SecretKey capsuleKey,
-  }) async {
-    final secretBox = _decodeSecretBox(encryptedData);
-
-    final clearBytes = await _aesGcm.decrypt(
-      secretBox,
-      secretKey: capsuleKey,
-    );
-
-    return utf8.decode(clearBytes);
-  }
-
-  // ============================
+  // ─────────────────────────────────────────────
   // HELPERS
-  // ============================
+  // ─────────────────────────────────────────────
 
   static String _encodeSecretBox(SecretBox box) {
     final map = {

@@ -26,6 +26,8 @@ class CapsuleService {
       final SecretKey userMasterKey =
           UserCryptoState.userMasterKey;
 
+          
+
       // Generate one capsule key
       final SecretKey capsuleKey =
           await BoxedEncryptionService.generateCapsuleKey();
@@ -71,7 +73,6 @@ class CapsuleService {
     }
   }
 
- 
   static Future<void> acceptInvite(
     String capsuleId,
     String userId,
@@ -110,8 +111,30 @@ class CapsuleService {
   }
 
 
+
+  static Future<void> autoUnlockExpiredCapsules(
+    String userId,
+  ) async {
+    final now = Timestamp.now();
+
+    final query = await _capsules
+        .where('memberIds', arrayContains: userId)
+        .where('status', isEqualTo: 'locked')
+        .where('unlockDate', isLessThanOrEqualTo: now)
+        .get();
+
+    for (final doc in query.docs) {
+      await doc.reference.update({
+        'status': 'unlocked',
+      });
+    }
+  }
+
+
+
   static Future<List<Map<String, dynamic>>> fetchUserCapsules(
-      String userId) async {
+    String userId,
+  ) async {
     try {
       final querySnapshot = await _capsules
           .where('memberIds', arrayContains: userId)
@@ -121,7 +144,7 @@ class CapsuleService {
           .map((doc) => doc.data() as Map<String, dynamic>)
           .toList();
     } catch (e, st) {
-      print("❌ Error fetching user capsules: $e");
+      print("Error fetching user capsules: $e");
       print(st);
       return [];
     }

@@ -1,6 +1,5 @@
 import 'package:boxed_app/providers/theme_provider.dart';
 import 'package:boxed_app/screens/home_screen.dart';
-import 'package:boxed_app/screens/profile_screen.dart';
 import 'package:boxed_app/screens/splash_screen.dart';
 import 'package:boxed_app/screens/choose_username_screen.dart';
 import 'package:boxed_app/screens/login_signup.dart';
@@ -53,14 +52,18 @@ void showNotification(RemoteMessage message) {
 
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  print('📩 Background message received: ${message.messageId}');
+  debugPrint('📩 Background message received: ${message.messageId}');
 }
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 
-  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  FirebaseMessaging.onBackgroundMessage(
+    _firebaseMessagingBackgroundHandler,
+  );
   FirebaseMessaging.onMessage.listen(showNotification);
   setupFlutterNotifications();
 
@@ -87,96 +90,38 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Boxed',
+      themeMode: themeProvider.themeMode,
+
+      // ───────────── LIGHT THEME ─────────────
       theme: ThemeData(
-        // Light theme
         scaffoldBackgroundColor: Colors.white,
-        appBarTheme: AppBarTheme(
+        appBarTheme: const AppBarTheme(
           backgroundColor: Colors.white,
           foregroundColor: Colors.black,
-          iconTheme: IconThemeData(color: Colors.black),
-          titleTextStyle: TextStyle(
-            color: Colors.black,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
         ),
-        textTheme: TextTheme(
-          displayLarge: TextStyle(color: Colors.black),
-          displayMedium: TextStyle(color: Colors.black),
-          displaySmall: TextStyle(color: Colors.black),
-          headlineLarge: TextStyle(color: Colors.black),
-          headlineMedium: TextStyle(color: Colors.black),
-          headlineSmall: TextStyle(color: Colors.black),
-          titleLarge: TextStyle(color: Colors.black),
-          titleMedium: TextStyle(color: Colors.black),
-          titleSmall: TextStyle(color: Colors.black),
-          bodyLarge: TextStyle(color: Colors.black),
-          bodyMedium: TextStyle(color: Colors.black),
-          bodySmall: TextStyle(color: Colors.black),
-        ), colorScheme: ColorScheme.light(
+        colorScheme: const ColorScheme.light(
           primary: Colors.black,
           onPrimary: Colors.white,
-          secondary: Colors.black,
-          onSecondary: Colors.white,
-          background: Colors.white,
-          onBackground: Colors.black,
           surface: Color(0xFFF4F4F4),
-          onSurface: Colors.black,
-          error: Colors.red,
-          onError: Colors.white,
-        ).copyWith(background: Colors.white),
+        ),
       ),
+
+      // ───────────── DARK THEME ─────────────
       darkTheme: ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: Colors.black,
-        primaryColor: Colors.white,
-        appBarTheme: AppBarTheme(
+        appBarTheme: const AppBarTheme(
           backgroundColor: Colors.black,
           foregroundColor: Colors.white,
-          iconTheme: IconThemeData(color: Colors.white),
-          titleTextStyle: TextStyle(
-            color: Colors.white,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
         ),
-        textTheme: TextTheme(
-          displayLarge: TextStyle(color: Colors.white),
-          displayMedium: TextStyle(color: Colors.white),
-          displaySmall: TextStyle(color: Colors.white),
-          headlineLarge: TextStyle(color: Colors.white),
-          headlineMedium: TextStyle(color: Colors.white),
-          headlineSmall: TextStyle(color: Colors.white),
-          titleLarge: TextStyle(color: Colors.white),
-          titleMedium: TextStyle(color: Colors.white),
-          titleSmall: TextStyle(color: Colors.white),
-          bodyLarge: TextStyle(color: Colors.white),
-          bodyMedium: TextStyle(color: Colors.white),
-          bodySmall: TextStyle(color: Colors.white),
-          labelLarge: TextStyle(color: Colors.white),
-          labelMedium: TextStyle(color: Colors.white),
-          labelSmall: TextStyle(color: Colors.white),
-        ),
-        iconTheme: IconThemeData(color: Colors.white),
-        elevatedButtonTheme: ElevatedButtonThemeData(
-          style: ElevatedButton.styleFrom(
-            foregroundColor: Colors.black,
-            backgroundColor: Colors.white,
-          ),
-        ), colorScheme: ColorScheme.dark(
+        colorScheme: const ColorScheme.dark(
           primary: Colors.white,
           onPrimary: Colors.black,
-          secondary: Colors.white,
-          onSecondary: Colors.black,
-          background: Colors.black,
-          onBackground: Colors.white,
           surface: Color(0xFF222222),
-          onSurface: Colors.white,
-          error: Colors.red,
-          onError: Colors.white,
-        ).copyWith(background: Colors.black),
+        ),
       ),
-      themeMode: themeProvider.themeMode,
+
+      // ───────────── APP FLOW ─────────────
       home: FutureBuilder<bool>(
         future: _getOnboardingSeen(),
         builder: (context, onboardingSnapshot) {
@@ -186,17 +131,15 @@ class MyApp extends StatelessWidget {
             );
           }
 
-          final onboardingSeen = onboardingSnapshot.data!;
-          if (!onboardingSeen) {
+          if (!onboardingSnapshot.data!) {
             return const SplashScreen();
           }
 
           return StreamBuilder<User?>(
             stream: FirebaseAuth.instance.authStateChanges(),
             builder: (context, authSnapshot) {
-              final authState = authSnapshot.connectionState;
-
-              if (authState == ConnectionState.waiting) {
+              if (authSnapshot.connectionState ==
+                  ConnectionState.waiting) {
                 return const Scaffold(
                   body: Center(child: CircularProgressIndicator()),
                 );
@@ -215,14 +158,17 @@ class MyApp extends StatelessWidget {
                 builder: (context, userDocSnapshot) {
                   if (!userDocSnapshot.hasData) {
                     return const Scaffold(
-                      body: Center(child: CircularProgressIndicator()),
+                      body: Center(
+                        child: CircularProgressIndicator(),
+                      ),
                     );
                   }
 
-                  final data = userDocSnapshot.data!.data() as Map<String, dynamic>?;
+                  final data = userDocSnapshot.data!.data()
+                      as Map<String, dynamic>?;
 
                   final hasUsername = data != null &&
-                      data.containsKey('username') &&
+                      data['username'] != null &&
                       data['username'].toString().trim().isNotEmpty;
 
                   return hasUsername
