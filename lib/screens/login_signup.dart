@@ -60,6 +60,7 @@ class _LoginSignupState extends State<LoginSignup> {
   }
 
   void _showFieldErrors({String? emailMsg, String? passwordMsg}) {
+    if (!mounted) return;
     setState(() {
       emailError = emailMsg;
       passwordError = passwordMsg;

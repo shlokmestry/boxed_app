@@ -9,6 +9,8 @@ import 'create_capsule_screen.dart';
 import 'profile_screen.dart';
 import 'settings_screen.dart';
 import 'collaborator_invites_screen.dart';
+import 'login_signup.dart';
+import '../state/user_crypto_state.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -65,6 +67,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   .orderBy('createdAt', descending: true)
                   .snapshots(),
               builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text(
+                      'Error loading capsules: ${snapshot.error}',
+                      style: textTheme.bodyLarge?.copyWith(
+                        color: colorScheme.error,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  );
+                }
+
                 if (!snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
                 }
@@ -210,7 +224,21 @@ class _HomeScreenState extends State<HomeScreen> {
               textColor: Colors.redAccent,
               onTap: () async {
                 Navigator.pop(context);
-                await FirebaseAuth.instance.signOut();
+                try {
+                  await FirebaseAuth.instance.signOut();
+                  UserCryptoState.clear();
+                  if (!context.mounted) return;
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const LoginSignup()),
+                    (route) => false,
+                  );
+                } catch (e) {
+                  if (!context.mounted) return;
+                  _showSnack(
+                    context,
+                    'Sign out failed: $e',
+                  );
+                }
               },
             ),
             const SizedBox(height: 20),
