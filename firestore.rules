@@ -8,13 +8,9 @@ service cloud.firestore {
     // ─────────────────────────────────────────────
     match /capsules/{capsuleId} {
 
-      // READ: only members, only after unlock
+      // READ: only members (capsule metadata)
       allow read: if request.auth != null
-        && request.auth.uid in resource.data.memberIds
-        && (
-          resource.data.status == 'unlocked' ||
-          request.time < resource.data.unlockDate
-        );
+        && request.auth.uid in resource.data.memberIds;
 
       // CREATE: creator only
       allow create: if request.auth != null
@@ -46,6 +42,29 @@ service cloud.firestore {
       // DELETE: any member can delete (decline flow)
       allow delete: if request.auth != null
         && request.auth.uid in resource.data.memberIds;
+    }
+
+    // ─────────────────────────────────────────────
+    // MEMORIES
+    // ─────────────────────────────────────────────
+    match /capsules/{capsuleId}/memories/{memoryId} {
+      allow read: if request.auth != null
+        && request.auth.uid in
+          get(/databases/$(database)/documents/capsules/$(capsuleId))
+            .data.memberIds
+        && request.time >=
+          get(/databases/$(database)/documents/capsules/$(capsuleId))
+            .data.unlockDate;
+
+      allow create: if request.auth != null
+        && request.auth.uid in
+          get(/databases/$(database)/documents/capsules/$(capsuleId))
+            .data.memberIds
+        && request.time <
+          get(/databases/$(database)/documents/capsules/$(capsuleId))
+            .data.unlockDate
+        && get(/databases/$(database)/documents/capsules/$(capsuleId))
+            .data.status == 'locked';
     }
   }
 }

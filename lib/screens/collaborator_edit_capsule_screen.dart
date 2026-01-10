@@ -27,7 +27,6 @@ class _CollaboratorEditCapsuleScreenState
 
   String? capsuleName;
   DateTime? unlockDate;
-  String? aesKey;
 
   @override
   void initState() {
@@ -50,7 +49,6 @@ class _CollaboratorEditCapsuleScreenState
     setState(() {
       capsuleName = data['name'];
       unlockDate = (data['unlockDate'] as Timestamp).toDate();
-      aesKey = data['aesKey'];
       _isLoading = false;
     });
   }
@@ -88,8 +86,8 @@ class _CollaboratorEditCapsuleScreenState
 
       await capsuleRef.collection('memories').add({
         'type': 'image',
-        'uploaderId': user.uid,
-        'timestamp': Timestamp.now(),
+        'createdBy': user.uid,
+        'createdAt': Timestamp.now(),
         'contentUrl': url,
       });
     }
@@ -98,10 +96,10 @@ class _CollaboratorEditCapsuleScreenState
     final note = _noteController.text.trim();
     if (note.isNotEmpty) {
       await capsuleRef.collection('memories').add({
-        'type': 'note',
-        'uploaderId': user.uid,
-        'timestamp': Timestamp.now(),
-        'text': note,
+        'type': 'text',
+        'createdBy': user.uid,
+        'createdAt': Timestamp.now(),
+        'content': note,
       });
     }
 
@@ -112,16 +110,19 @@ class _CollaboratorEditCapsuleScreenState
 
     final updatedCollaborators = (data!['collaborators'] as List)
         .map((c) {
-          if (c['userId'] == currentUserId) {
+          if (c['uid'] == currentUserId) {
             c['accepted'] = true;
           }
           return c;
         })
         .toList();
 
+    final allAccepted =
+        updatedCollaborators.every((c) => c['accepted'] == true);
+
     await capsuleRef.update({
       'collaborators': updatedCollaborators,
-      'status': 'active',
+      'status': allAccepted ? 'locked' : 'pending',
     });
 
     if (!mounted) return;

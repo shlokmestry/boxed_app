@@ -97,7 +97,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     final emoji = data['emoji'] ?? '📦';
                     final unlockDate = (data['unlockDate'] as Timestamp).toDate();
                     final isUnlocked = DateTime.now().isAfter(unlockDate);
-                    final status = data['status'] ?? 'active';
+                    final status = data['status'] ?? 'locked';
                     final isPending = status == 'pending';
 
                     return CapsuleCard(

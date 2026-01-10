@@ -144,18 +144,18 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
         userMasterKey: userMasterKey,
       );
 
-      // 2️⃣ Collaborator IDs (new schema)
+      // 2️⃣ Member IDs
       // creator + selected collaborators
-      final List<String> collaboratorIds = [
+      final List<String> memberIds = [
         user.uid,
         ..._collaborators.map((c) => c['userId'] as String),
       ];
 
-      // 3️⃣ New status model
-      // - no collaborators => active (user can add memories)
+      // 3️⃣ Status model
+      // - no collaborators => locked (user can add memories)
       // - with collaborators => pending (wait for accept)
       final String status =
-          _collaborators.isNotEmpty ? 'pending' : 'active';
+          _collaborators.isNotEmpty ? 'pending' : 'locked';
 
       // 4️⃣ Create capsule doc (NEW SCHEMA)
       final capsuleRef = firestore.collection('capsules').doc();
@@ -164,15 +164,30 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
       final Map<String, dynamic> roles = {
         user.uid: 'editor',
         for (final c in _collaborators)
-          (c['userId'] as String): (c['role'] ?? 'editor').toString().toLowerCase(),
+          (c['userId'] as String):
+              (c['role'] ?? 'editor').toString().toLowerCase(),
       };
+
+      final List<Map<String, dynamic>> collaborators = [
+        {
+          'uid': user.uid,
+          'accepted': true,
+        },
+        for (final c in _collaborators)
+          {
+            'uid': c['userId'] as String,
+            'accepted': false,
+            'role': (c['role'] ?? 'editor').toString().toLowerCase(),
+          },
+      ];
 
       await capsuleRef.set({
         'name': _nameController.text.trim(),
         'description': _descriptionController.text.trim(),
         'creatorId': user.uid,
         'unlockDate': Timestamp.fromDate(_selectedDateTime!.toUtc()),
-        'collaboratorIds': collaboratorIds,
+        'memberIds': memberIds,
+        'collaborators': collaborators,
         'roles': roles,
         // Keep encrypted key store as-is (creator only for now)
         'capsuleKeys': {user.uid: encryptedCapsuleKey},
@@ -214,21 +229,20 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
         final upload = await ref.putFile(image);
         final url = await upload.ref.getDownloadURL();
 
-        // Note: Your Firestore rules allow memory writes only when status == "active".
+        // Note: we only write memories immediately if status == locked (solo capsule).
         // If capsule is "pending", this write would fail.
-        // So we only write memories immediately if status == active (solo capsule).
-        if (status == 'active') {
+        if (status == 'locked') {
           await capsuleRef.collection('memories').add({
             'type': 'image',
-            'content': url,
+            'contentUrl': url,
             'createdBy': user.uid,
             'createdAt': FieldValue.serverTimestamp(),
           });
         }
       }
 
-      // 7️⃣ Encrypted note -> memory doc (only if status == active)
-      if (status == 'active' && _noteController.text.trim().isNotEmpty) {
+      // 7️⃣ Encrypted note -> memory doc (only if status == locked)
+      if (status == 'locked' && _noteController.text.trim().isNotEmpty) {
         final encryptedNote =
             await BoxedEncryptionService.encryptData(
           plainText: _noteController.text.trim(),

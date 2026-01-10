@@ -31,7 +31,7 @@ class CollaborationService {
 
       // Activate capsule
       transaction.update(capsuleRef, {
-        'status': 'active',
+        'status': 'locked',
         'updatedAt': FieldValue.serverTimestamp(),
       });
 

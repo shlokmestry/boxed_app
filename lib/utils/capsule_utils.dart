@@ -13,19 +13,19 @@ class CapsuleUtils {
 
     final updatedCollaborators = (data['collaborators'] as List)
         .map((collab) {
-          if (collab['userId'] == user.uid) {
+          if (collab['uid'] == user.uid) {
             collab['accepted'] = true;
           }
           return collab;
         })
         .toList();
 
-    // If all collaborators accepted, set 'active'; else remain 'pending'
+    // If all collaborators accepted, set 'locked'; else remain 'pending'
     final allAccepted = updatedCollaborators.every((c) => c['accepted'] == true);
 
     await capsuleRef.update({
       'collaborators': updatedCollaborators,
-      'status': allAccepted ? 'active' : data['status'],
+      'status': allAccepted ? 'locked' : data['status'],
     });
   }
 

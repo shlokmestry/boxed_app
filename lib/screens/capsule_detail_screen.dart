@@ -74,28 +74,19 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
     }
 
     final encryptedCapsuleKey = (data['capsuleKeys'] as Map?)?[currentUser.uid];
-    if (encryptedCapsuleKey == null) {
-      // User doesn't have access to this capsule key.
-      setState(() => _loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No capsule key found for this user.')),
-      );
-      return;
-    }
+    if (encryptedCapsuleKey != null) {
+      try {
+        final capsuleKey = await BoxedEncryptionService.decryptCapsuleKeyForUser(
+          encryptedCapsuleKey: encryptedCapsuleKey,
+          userMasterKey: UserCryptoState.userMasterKey,
+        );
 
-    try {
-      final capsuleKey = await BoxedEncryptionService.decryptCapsuleKeyForUser(
-        encryptedCapsuleKey: encryptedCapsuleKey,
-        userMasterKey: UserCryptoState.userMasterKey,
-      );
-
-      CapsuleCryptoState.setCapsuleKey(widget.capsuleId, capsuleKey);
-    } catch (e) {
-      setState(() => _loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to decrypt capsule key: $e')),
-      );
-      return;
+        CapsuleCryptoState.setCapsuleKey(widget.capsuleId, capsuleKey);
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to decrypt capsule key: $e')),
+        );
+      }
     }
 
     // ============================
@@ -312,7 +303,7 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
                           .doc(widget.capsuleId)
                           .collection('memories')
                           .where('type', isEqualTo: 'image')
-                          .orderBy('timestamp', descending: false)
+                          .orderBy('createdAt', descending: false)
                           .snapshots(),
                       builder: (context, snapshot) {
                         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
