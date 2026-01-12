@@ -3,49 +3,58 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ─────────────────────────────────────────────
-    // CAPSULES
-    // ─────────────────────────────────────────────
+    /* Helper: user must be signed in */
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    /* USERS collection */
+    match /users/{userId} {
+      // Any signed-in user can read profiles
+      allow read: if isSignedIn();
+
+      // Only the owner can create/update their profile
+      allow write: if isSignedIn()
+        && request.auth.uid == userId;
+    }
+
+    /* SOLO CAPSULES (no collaborators) */
     match /capsules/{capsuleId} {
 
-      // READ: only members, only after unlock
-      allow read: if request.auth != null
-        && request.auth.uid in resource.data.memberIds
-        && (
-          resource.data.status == 'unlocked' ||
-          request.time < resource.data.unlockDate
-        );
+      // CREATE: only the signed-in creator can create their capsule
+      allow create: if isSignedIn()
+        && request.resource.data.creatorId == request.auth.uid;
 
-      // CREATE: creator only
-      allow create: if request.auth != null
-        && request.resource.data.creatorId == request.auth.uid
-        && request.auth.uid in request.resource.data.memberIds
-        && request.resource.data.status in ['pending', 'locked'];
+      // READ: only the creator can read their capsules
+      allow read: if isSignedIn()
+        && resource.data.creatorId == request.auth.uid;
 
-      // UPDATE:
-      allow update: if request.auth != null
-        && (
-          // Creator can manage capsule until unlock
-          (
-            request.auth.uid == resource.data.creatorId
-            && request.time < resource.data.unlockDate
-          )
+      // UPDATE: only the creator can update their capsules
+      allow update: if isSignedIn()
+        && resource.data.creatorId == request.auth.uid;
 
-          ||
+      // DELETE: only the creator can delete their capsules
+      allow delete: if isSignedIn()
+        && resource.data.creatorId == request.auth.uid;
 
-          // Collaborator can accept invite only
-          (
-            request.auth.uid in resource.data.memberIds
-            && request.resource.data
-              .diff(resource.data)
-              .changedKeys()
-              .hasOnly(['collaborators', 'status'])
-          )
-        );
+      /* MEMORIES subcollection under a capsule */
+      match /memories/{memoryId} {
 
-      // DELETE: any member can delete (decline flow)
-      allow delete: if request.auth != null
-        && request.auth.uid in resource.data.memberIds;
+        // Creator can create memories under their own capsule
+        allow create: if isSignedIn()
+          && get(/databases/$(database)/documents/capsules/$(capsuleId))
+               .data.creatorId == request.auth.uid;
+
+        // Creator can read memories; you can later restrict by unlockDate if you want
+        allow read: if isSignedIn()
+          && get(/databases/$(database)/documents/capsules/$(capsuleId))
+               .data.creatorId == request.auth.uid;
+
+        // Optional: creator can update/delete memories
+        allow update, delete: if isSignedIn()
+          && get(/databases/$(database)/documents/capsules/$(capsuleId))
+               .data.creatorId == request.auth.uid;
+      }
     }
   }
 }

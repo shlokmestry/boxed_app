@@ -1,7 +1,7 @@
 import 'dart:io';
+import 'dart:convert'; 
 
 import 'package:boxed_app/services/boxed_encryption_service.dart';
-import 'package:boxed_app/state/user_crypto_state.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -31,15 +31,6 @@ class CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     'assets/basic/background2.webp',
     'assets/basic/background3.jpg',
   ];
-
-  bool get isCryptoReady {
-    try {
-      UserCryptoState.userMasterKey;
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
 
   Future<void> selectDate() async {
     final now = DateTime.now();
@@ -93,25 +84,15 @@ class CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
       return;
     }
 
-    if (!isCryptoReady) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Encryption not ready yet. Please restart the app.')),
-      );
-      return;
-    }
-
     setState(() => isLoading = true);
     try {
       final firestore = FirebaseFirestore.instance;
       final storage = FirebaseStorage.instance;
 
-      // Generate keys (keep your existing crypto flow)
-      final userMasterKey = UserCryptoState.userMasterKey;
+      // ✅ Generate capsule key and store as base64 string (Firestore-safe)
       final capsuleKey = await BoxedEncryptionService.generateCapsuleKey();
-      final encryptedCapsuleKey = await BoxedEncryptionService.encryptCapsuleKeyForUser(
-        capsuleKey: capsuleKey,
-        userMasterKey: userMasterKey,
-      );
+      final capsuleKeyBytes = await capsuleKey.extractBytes();
+      final capsuleKeyBase64 = base64Encode(capsuleKeyBytes);
 
       // Solo capsule - always active, no collaborators
       final capsuleRef = firestore.collection('capsules').doc();
@@ -123,7 +104,7 @@ class CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
         'description': descriptionController.text.trim(),
         'creatorId': user.uid,
         'unlockDate': Timestamp.fromDate(selectedDateTime!.toUtc()),
-        'capsuleKeys': {user.uid: encryptedCapsuleKey},
+        'capsuleKeys': {user.uid: capsuleKeyBase64}, // ✅ string, not SecretKey
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
         'emoji': '🔒',
@@ -131,7 +112,7 @@ class CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
         'isSurprise': false,
       });
 
-      // Upload images as memories (always possible since solo)
+      // Upload images as memories
       for (final image in selectedImages) {
         final filename = DateTime.now().millisecondsSinceEpoch.toString();
         final ref = storage.ref('capsules/$capsuleId/$filename.jpg');
@@ -153,7 +134,7 @@ class CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
         );
         await capsuleRef.collection('memories').add({
           'type': 'text',
-          'content': encryptedNote,  // Encrypted payload
+          'content': encryptedNote,
           'createdBy': user.uid,
           'createdAt': FieldValue.serverTimestamp(),
           'isEncrypted': true,
@@ -245,18 +226,20 @@ class CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     return Wrap(
       spacing: 8,
       children: [
-        ...selectedImages.map((img) => Stack(
-              children: [
-                Image.file(img, width: 80, height: 80, fit: BoxFit.cover),
-                Positioned(
-                  right: 0,
-                  child: IconButton(
-                    icon: const Icon(Icons.close, size: 16),
-                    onPressed: () => removeImage(img),
-                  ),
+        ...selectedImages.map(
+          (img) => Stack(
+            children: [
+              Image.file(img, width: 80, height: 80, fit: BoxFit.cover),
+              Positioned(
+                right: 0,
+                child: IconButton(
+                  icon: const Icon(Icons.close, size: 16),
+                  onPressed: () => removeImage(img),
                 ),
-              ],
-            )),
+              ),
+            ],
+          ),
+        ),
         GestureDetector(
           onTap: pickImages,
           child: Container(

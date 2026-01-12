@@ -1,3 +1,4 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -9,6 +10,8 @@ import 'capsule_detail_screen.dart';
 import 'create_capsule_screen.dart';
 import 'profile_screen.dart';
 import 'settings_screen.dart';
+
+
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -97,9 +100,7 @@ class _HomeScreenState extends State<HomeScreen> {
         );
 
       case CapsuleLoadState.ready:
-        final capsules = controller.capsules
-            .where((c) => c['status'] != 'declined')
-            .toList();
+      final capsules = controller.capsules;
 
         if (capsules.isEmpty) {
           return Center(
@@ -120,10 +121,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
             final title = data['name'] ?? '';
             final emoji = data['emoji'] ?? '📦';
-            final unlockDate = data['unlockDate'] as DateTime;
+          final unlockDate = (data['unlockDate'] as Timestamp).toDate();
             final isUnlocked =
                 DateTime.now().isAfter(unlockDate);
-            final isPending = data['status'] == 'pending';
+            final isPending = false;
 
             return CapsuleCard(
               title: title,
