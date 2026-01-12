@@ -3,6 +3,8 @@ import 'package:boxed_app/screens/home_screen.dart';
 import 'package:boxed_app/screens/splash_screen.dart';
 import 'package:boxed_app/screens/choose_username_screen.dart';
 import 'package:boxed_app/screens/login_signup.dart';
+import 'package:boxed_app/controllers/capsule_controller.dart';
+import 'package:boxed_app/state/user_crypto_state.dart'; // 🔐 crypto bootstrap
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -50,8 +52,7 @@ void showNotification(RemoteMessage message) {
   }
 }
 
-Future<void> _firebaseMessagingBackgroundHandler(
-    RemoteMessage message) async {
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
@@ -65,16 +66,17 @@ Future<void> main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  FirebaseMessaging.onBackgroundMessage(
-    _firebaseMessagingBackgroundHandler,
-  );
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   FirebaseMessaging.onMessage.listen(showNotification);
 
   setupFlutterNotifications();
 
   runApp(
-    ChangeNotifierProvider(
-      create: (_) => ThemeProvider(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => CapsuleController()),
+      ],
       child: const MyApp(),
     ),
   );
@@ -96,8 +98,6 @@ class MyApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       title: 'Boxed',
       themeMode: themeProvider.themeMode,
-
-      // ───────────── LIGHT THEME ─────────────
       theme: ThemeData(
         scaffoldBackgroundColor: Colors.white,
         appBarTheme: const AppBarTheme(
@@ -110,8 +110,6 @@ class MyApp extends StatelessWidget {
           surface: Color(0xFFF4F4F4),
         ),
       ),
-
-      // ───────────── DARK THEME ─────────────
       darkTheme: ThemeData(
         brightness: Brightness.dark,
         scaffoldBackgroundColor: Colors.black,
@@ -125,64 +123,93 @@ class MyApp extends StatelessWidget {
           surface: Color(0xFF222222),
         ),
       ),
-
-      // ───────────── APP FLOW ─────────────
       home: FutureBuilder<bool>(
         future: _getOnboardingSeen(),
         builder: (context, onboardingSnapshot) {
-          if (!onboardingSnapshot.hasData) {
+          if (onboardingSnapshot.connectionState != ConnectionState.done) {
             return const Scaffold(
               body: Center(child: CircularProgressIndicator()),
             );
           }
 
-          if (!onboardingSnapshot.data!) {
+          if (onboardingSnapshot.hasError) {
+            return const Scaffold(
+              body: Center(child: Text('Failed to load app state')),
+            );
+          }
+
+          final onboardingSeen = onboardingSnapshot.data ?? false;
+
+          if (!onboardingSeen) {
             return const SplashScreen();
           }
 
           return StreamBuilder<User?>(
             stream: FirebaseAuth.instance.authStateChanges(),
             builder: (context, authSnapshot) {
-              if (authSnapshot.connectionState ==
-                  ConnectionState.waiting) {
+              if (authSnapshot.connectionState == ConnectionState.waiting) {
                 return const Scaffold(
                   body: Center(child: CircularProgressIndicator()),
                 );
               }
 
               final user = authSnapshot.data;
+
               if (user == null) {
                 return const LoginSignup();
               }
 
-              return FutureBuilder<DocumentSnapshot>(
-                future: FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(user.uid)
-                    .get(),
-                builder: (context, userDocSnapshot) {
-                  if (!userDocSnapshot.hasData) {
+              // 🔐 Crypto bootstrap (must complete before app screens)
+              return FutureBuilder<void>(
+                future: UserCryptoState.initialize(user.uid),
+                builder: (context, cryptoSnapshot) {
+                  if (cryptoSnapshot.connectionState != ConnectionState.done) {
                     return const Scaffold(
-                      body: Center(
-                        child: CircularProgressIndicator(),
-                      ),
+                      body: Center(child: CircularProgressIndicator()),
                     );
                   }
 
-                  final data = userDocSnapshot.data!.data()
-                      as Map<String, dynamic>?;
+                  if (cryptoSnapshot.hasError) {
+                    return const Scaffold(
+                      body: Center(child: Text('Failed to initialize encryption')),
+                    );
+                  }
 
-                  final hasUsername =
-                      data != null &&
-                      data['username'] != null &&
-                      data['username']
-                          .toString()
-                          .trim()
-                          .isNotEmpty;
+                  // Username check after crypto is ready
+                  return FutureBuilder<DocumentSnapshot>(
+                    future: FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(user.uid)
+                        .get(),
+                    builder: (context, userDocSnapshot) {
+                      if (userDocSnapshot.connectionState !=
+                          ConnectionState.done) {
+                        return const Scaffold(
+                          body: Center(child: CircularProgressIndicator()),
+                        );
+                      }
 
-                  return hasUsername
-                      ? const HomeScreen()
-                      : const ChooseUsernameScreen();
+                      if (userDocSnapshot.hasError) {
+                        return const Scaffold(
+                          body: Center(child: Text('Failed to load profile')),
+                        );
+                      }
+
+                      final data = userDocSnapshot.data?.data()
+                          as Map<String, dynamic>?;
+
+                      final hasUsername = data != null &&
+                          data['username'] != null &&
+                          data['username']
+                              .toString()
+                              .trim()
+                              .isNotEmpty;
+
+                      return hasUsername
+                          ? const HomeScreen()
+                          : const ChooseUsernameScreen();
+                    },
+                  );
                 },
               );
             },

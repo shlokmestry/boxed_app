@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cryptography/cryptography.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class BoxedEncryptionService {
   static final AesGcm _aesGcm = AesGcm.with256bits();
@@ -10,10 +11,13 @@ class BoxedEncryptionService {
     bits: 256,
   );
 
+  static const _userMasterKeyPrefix = 'boxed_user_master_key_';
+
   // ─────────────────────────────────────────────
-  // USER MASTER KEY (DERIVED + RECOVERABLE)
+  // USER MASTER KEY (DERIVED + PERSISTED)
   // ─────────────────────────────────────────────
 
+  /// 🔐 Called at LOGIN / SIGNUP (password available)
   static Future<SecretKey> getOrCreateUserMasterKey({
     required String userId,
     required String password,
@@ -30,10 +34,49 @@ class BoxedEncryptionService {
 
     final salt = data['encryptionSalt'] as String;
 
-    return _pbkdf2.deriveKey(
+    final key = await _pbkdf2.deriveKey(
       secretKey: SecretKey(utf8.encode(password)),
       nonce: utf8.encode('$userId:$salt'),
     );
+
+    // 🔐 Persist key for app restarts
+    await persistUserMasterKey(
+      userId: userId,
+      userMasterKey: key,
+    );
+
+    return key;
+  }
+
+  /// 🔐 Persist derived master key (v1: SharedPreferences)
+  static Future<void> persistUserMasterKey({
+    required String userId,
+    required SecretKey userMasterKey,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final bytes = await userMasterKey.extractBytes();
+
+    await prefs.setString(
+      '$_userMasterKeyPrefix$userId',
+      base64Encode(bytes),
+    );
+  }
+
+  /// 🔐 Load master key on app startup (NO password required)
+  static Future<SecretKey?> loadUserMasterKey(String userId) async {
+    final prefs = await SharedPreferences.getInstance();
+    final encoded =
+        prefs.getString('$_userMasterKeyPrefix$userId');
+
+    if (encoded == null) return null;
+
+    return SecretKey(base64Decode(encoded));
+  }
+
+  /// 🚪 Clear persisted key on logout
+  static Future<void> clearUserMasterKey(String userId) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('$_userMasterKeyPrefix$userId');
   }
 
   // ─────────────────────────────────────────────
@@ -106,8 +149,7 @@ class BoxedEncryptionService {
   // HELPERS
   // ─────────────────────────────────────────────
 
-  /// Encodes a SecretBox into a single base64 string containing:
-  /// nonce + ciphertext + mac
+  /// Encodes nonce + ciphertext + mac into one base64 string
   static String _encodeSecretBox(SecretBox box) {
     final map = <String, String>{
       'nonce': base64Encode(box.nonce),
@@ -119,7 +161,8 @@ class BoxedEncryptionService {
 
   static SecretBox _decodeSecretBox(String encoded) {
     final decoded =
-        jsonDecode(utf8.decode(base64Decode(encoded))) as Map<String, dynamic>;
+        jsonDecode(utf8.decode(base64Decode(encoded)))
+            as Map<String, dynamic>;
 
     return SecretBox(
       base64Decode(decoded['cipherText'] as String),

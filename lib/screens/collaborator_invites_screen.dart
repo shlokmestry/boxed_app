@@ -14,11 +14,10 @@ class CollaboratorInvitesScreen extends StatefulWidget {
       _CollaboratorInvitesScreenState();
 }
 
-class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
-  User? currentUser = FirebaseAuth.instance.currentUser;
+class _CollaboratorInvitesScreenState
+    extends State<CollaboratorInvitesScreen> {
+  final User? currentUser = FirebaseAuth.instance.currentUser;
   bool _isLoading = false;
-
-
 
   Stream<List<QueryDocumentSnapshot>> _pendingInvitesStream() {
     return FirebaseAuth.instance.authStateChanges().switchMap((user) {
@@ -44,18 +43,19 @@ class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
                 orElse: () => {},
               );
 
-          return myCollab.isNotEmpty && myCollab['accepted'] == false;
+          return myCollab.isNotEmpty &&
+              myCollab['accepted'] == false;
         }).toList();
       });
     });
   }
 
-  
-
   Future<void> _acceptInvite(
     BuildContext context,
     QueryDocumentSnapshot capsuleDoc,
   ) async {
+    if (currentUser == null) return;
+
     final bool? editNow = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -80,14 +80,16 @@ class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
 
     try {
       await CapsuleService.acceptInvite(
-        capsuleDoc.id,
-        currentUser!.uid,
+        capsuleId: capsuleDoc.id,
+        userId: currentUser!.uid,
       );
 
       if (!context.mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Collaboration started')),
+        const SnackBar(
+          content: Text('Collaboration started'),
+        ),
       );
 
       if (editNow == true) {
@@ -103,7 +105,9 @@ class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
       if (!context.mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error accepting invite: $e')),
+        SnackBar(
+          content: Text('Error accepting invite: $e'),
+        ),
       );
     } finally {
       if (mounted) {
@@ -112,18 +116,18 @@ class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
     }
   }
 
-
-
   Future<void> _declineInvite(
     BuildContext context,
     QueryDocumentSnapshot capsuleDoc,
   ) async {
+    if (currentUser == null) return;
+
     final bool? confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Decline invite?'),
         content: const Text(
-          'Declining will permanently delete this capsule for everyone.',
+          'Declining will remove you from this collaboration.',
         ),
         actions: [
           TextButton(
@@ -146,18 +150,25 @@ class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
     setState(() => _isLoading = true);
 
     try {
-      await CapsuleService.declineInvite(capsuleDoc.id);
+      await CapsuleService.declineInvite(
+        capsuleId: capsuleDoc.id,
+        userId: currentUser!.uid,
+      );
 
       if (!context.mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invite declined')),
+        const SnackBar(
+          content: Text('Invite declined'),
+        ),
       );
     } catch (e) {
       if (!context.mounted) return;
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error declining invite: $e')),
+        SnackBar(
+          content: Text('Error declining invite: $e'),
+        ),
       );
     } finally {
       if (mounted) {
@@ -165,8 +176,6 @@ class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
       }
     }
   }
-
-  
 
   @override
   Widget build(BuildContext context) {
@@ -182,19 +191,23 @@ class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
                 if (snapshot.connectionState ==
                     ConnectionState.waiting) {
                   return const Center(
-                      child: CircularProgressIndicator());
+                    child: CircularProgressIndicator(),
+                  );
                 }
 
                 if (snapshot.hasError) {
                   return Center(
-                    child: Text('Error: ${snapshot.error}'),
+                    child: Text(
+                      'Error: ${snapshot.error}',
+                    ),
                   );
                 }
 
                 if (!snapshot.hasData ||
                     snapshot.data!.isEmpty) {
                   return const Center(
-                    child: Text('No collaboration invites'),
+                    child:
+                        Text('No collaboration invites'),
                   );
                 }
 
@@ -208,17 +221,20 @@ class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
                         docs[index].data() as Map<String, dynamic>;
 
                     final capsuleTitle =
-                        data['name'] ?? 'Untitled Capsule';
+                        data['name'] ??
+                            'Untitled Capsule';
 
                     return Card(
-                      margin:
-                          const EdgeInsets.only(bottom: 16),
+                      margin: const EdgeInsets.only(
+                        bottom: 16,
+                      ),
                       shape: RoundedRectangleBorder(
                         borderRadius:
                             BorderRadius.circular(12),
                       ),
                       child: Padding(
-                        padding: const EdgeInsets.all(16),
+                        padding:
+                            const EdgeInsets.all(16),
                         child: Column(
                           crossAxisAlignment:
                               CrossAxisAlignment.start,
@@ -245,11 +261,13 @@ class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
                               children: [
                                 Expanded(
                                   child: OutlinedButton(
-                                    onPressed: () =>
-                                        _declineInvite(
-                                      context,
-                                      docs[index],
-                                    ),
+                                    onPressed: _isLoading
+                                        ? null
+                                        : () =>
+                                            _declineInvite(
+                                              context,
+                                              docs[index],
+                                            ),
                                     child:
                                         const Text('Decline'),
                                   ),
@@ -257,11 +275,13 @@ class _CollaboratorInvitesScreenState extends State<CollaboratorInvitesScreen> {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: ElevatedButton(
-                                    onPressed: () =>
-                                        _acceptInvite(
-                                      context,
-                                      docs[index],
-                                    ),
+                                    onPressed: _isLoading
+                                        ? null
+                                        : () =>
+                                            _acceptInvite(
+                                              context,
+                                              docs[index],
+                                            ),
                                     child:
                                         const Text('Accept'),
                                   ),

@@ -8,6 +8,10 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
+import 'package:boxed_app/controllers/capsule_controller.dart';
+
+
 
 class CreateCapsuleScreen extends StatefulWidget {
   const CreateCapsuleScreen({super.key});
@@ -37,14 +41,17 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
   final List<Map<String, dynamic>> _collaborators = [];
 
   // ───────────── SAFE SESSION CHECK ─────────────
-  bool _hasUserMasterKey() {
+  bool isCryptoReady() {
     try {
       UserCryptoState.userMasterKey;
       return true;
     } catch (_) {
       return false;
     }
+    
   }
+
+  
 
   Future<void> _selectDate() async {
     final now = DateTime.now();
@@ -114,17 +121,25 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
       return;
     }
 
-    // 🔐 HARD STOP if session expired
-    if (!_hasUserMasterKey()) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Session expired. Please log in again.'),
-        ),
-      );
+      debugPrint("🟢 Validation passed, creating capsule...");
 
-      Navigator.of(context).pop();
-      return;
-    }
+bool cryptoReady;
+try {
+  UserCryptoState.userMasterKey;
+  cryptoReady = true;
+} catch (_) {
+  cryptoReady = false;
+}
+
+if (!cryptoReady) {
+  ScaffoldMessenger.of(context).showSnackBar(
+    const SnackBar(
+      content: Text('Encryption not ready yet. Please restart the app.'),
+    ),
+  );
+  return;
+}
+
 
     setState(() => _isLoading = true);
 
@@ -244,18 +259,14 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
         });
       }
 
-      // 8️⃣ UX message
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            status == 'pending'
-                ? 'Capsule created! Invite sent to collaborators.'
-                : 'Capsule created!',
-          ),
-        ),
-      );
 
-      Navigator.pop(context);
+       // ✅ Capsule creation finished
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+
+
+      
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error: $e')),
