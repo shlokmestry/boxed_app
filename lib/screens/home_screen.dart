@@ -9,7 +9,6 @@ import 'capsule_detail_screen.dart';
 import 'create_capsule_screen.dart';
 import 'profile_screen.dart';
 import 'settings_screen.dart';
-import 'collaborator_invites_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -195,31 +194,8 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
               },
             ),
-            _DrawerButton(
-              icon: Icons.group_rounded,
-              label: 'Collaborators',
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        const CollaboratorInvitesScreen(),
-                  ),
-                );
-              },
-            ),
-            _DrawerButton(
-              icon: Icons.group,
-              label: 'Shared With Me',
-              onTap: () {
-                Navigator.pop(context);
-                _showSnack(
-                  context,
-                  "Shared Capsules coming soon",
-                );
-              },
-            ),
+         
+            
             _DrawerButton(
               icon: Icons.color_lens_outlined,
               label: 'Themes',
