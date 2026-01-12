@@ -1,8 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cryptography/cryptography.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+
 import 'package:boxed_app/services/boxed_encryption_service.dart';
 import 'package:boxed_app/state/user_crypto_state.dart';
 import 'package:boxed_app/state/capsule_crypto_state.dart';
@@ -31,6 +35,8 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
   bool _isUnlocked = false;
   bool _loading = true;
 
+  List<Map<String, dynamic>> _memories = [];
+
   final List<String> _backgroundImages = [
     'assets/basic_background1.jpg',
     'assets/basic_background2.webp',
@@ -41,73 +47,111 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
   void initState() {
     super.initState();
     _fetchCapsuleDetails();
-
   }
 
-
-  void _fetchCapsuleDetails() async {
-    final doc = await FirebaseFirestore.instance
-        .collection('capsules')
-        .doc(widget.capsuleId)
-        .get();
-
-    final data = doc.data();
-    if (data == null) return;
-
-    // ============================
-    // ✅ STEP 6: Decrypt capsule key from capsuleKeys[uid]
-    // ============================
-    final currentUser = FirebaseAuth.instance.currentUser;
-    if (currentUser == null) {
-      // If user is not signed in, we can't decrypt anything.
-      setState(() => _loading = false);
-      return;
-    }
-
-    final encryptedCapsuleKey = (data['capsuleKeys'] as Map?)?[currentUser.uid];
-    if (encryptedCapsuleKey == null) {
-      // User doesn't have access to this capsule key.
-      setState(() => _loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No capsule key found for this user.')),
-      );
-      return;
-    }
+  Future<void> _fetchCapsuleDetails() async {
+    // Always start in loading state
+    if (mounted) setState(() => _loading = true);
 
     try {
-      final capsuleKey = await BoxedEncryptionService.decryptCapsuleKeyForUser(
-        encryptedCapsuleKey: encryptedCapsuleKey,
-        userMasterKey: UserCryptoState.userMasterKey,
-      );
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
+        if (mounted) setState(() => _loading = false);
+        return;
+      }
+
+      final doc = await FirebaseFirestore.instance
+          .collection('capsules')
+          .doc(widget.capsuleId)
+          .get()
+          .timeout(const Duration(seconds: 10));
+
+      if (!doc.exists) {
+        if (mounted) setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Capsule not found.')),
+        );
+        return;
+      }
+
+      final data = doc.data();
+      if (data == null) {
+        if (mounted) setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Capsule data is empty.')),
+        );
+        return;
+      }
+
+      final capsuleKeys = data['capsuleKeys'];
+      if (capsuleKeys is! Map) {
+        if (mounted) setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('capsuleKeys is missing or invalid.')),
+        );
+        return;
+      }
+
+      final encryptedCapsuleKey = capsuleKeys[currentUser.uid];
+      if (encryptedCapsuleKey is! String || encryptedCapsuleKey.isEmpty) {
+        if (mounted) setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No capsule key found for this user.')),
+        );
+        return;
+      }
+
+      // ✅ Decrypt capsule key (two supported formats)
+      // 1) Preferred: decrypt using userMasterKey (AES-GCM SecretBox format)
+      // 2) Fallback (MVP): treat encryptedCapsuleKey as raw base64 key bytes
+      SecretKey capsuleKey;
+      final userMasterKey = UserCryptoState.userMasterKeyOrNull;
+
+
+      if (userMasterKey != null) {
+        try {
+          capsuleKey = await BoxedEncryptionService.decryptCapsuleKeyForUser(
+            encryptedCapsuleKey: encryptedCapsuleKey,
+            userMasterKey: userMasterKey,
+          );
+        } catch (_) {
+          // Fallback to raw base64 key
+          final bytes = base64Decode(encryptedCapsuleKey);
+          capsuleKey = SecretKey(bytes);
+        }
+      } else {
+        final bytes = base64Decode(encryptedCapsuleKey);
+        capsuleKey = SecretKey(bytes);
+      }
 
       CapsuleCryptoState.setCapsuleKey(widget.capsuleId, capsuleKey);
-    } catch (e) {
-      setState(() => _loading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to decrypt capsule key: $e')),
-      );
-      return;
-    }
 
-    // ============================
-    // Metadata (unchanged)
-    // ============================
-    final ts = data['unlockDate'];
-    final title = data['name'];
-    final description = data['description'];
-    final bgId = data['backgroundId'];
+      // Metadata
+      final ts = data['unlockDate'];
+      final title = data['name'];
+      final description = data['description'];
+      final bgId = data['backgroundId'];
 
-    if (ts != null) {
-      final date = (ts as Timestamp).toDate();
+      if (ts is! Timestamp) {
+        if (mounted) setState(() => _loading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('unlockDate is missing/invalid.')),
+        );
+        return;
+      }
+
+      final date = ts.toDate();
       final now = DateTime.now();
-      final unlocked = now.isAfter(date);
+    final unlocked = !now.isBefore(date); 
+    final diff = date.difference(now);
 
+      if (!mounted) return;
       setState(() {
         _unlockDate = date;
-        _capsuleTitle = title;
-        _capsuleDescription = description;
-        _backgroundId = bgId;
-        _remaining = date.difference(now);
+        _capsuleTitle = (title ?? '').toString();
+        _capsuleDescription = (description ?? '').toString();
+        _backgroundId = bgId is int ? bgId : null;
+_remaining = diff.isNegative ? Duration.zero : diff;
         _isUnlocked = unlocked;
         _loading = false;
       });
@@ -118,6 +162,8 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
         final unlockedNow = now.isAfter(date);
         final newDuration = date.difference(now);
 
+        if (!mounted) return;
+
         if (unlockedNow) {
           _timer?.cancel();
           setState(() {
@@ -125,6 +171,7 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
             _showContent = true;
             _remaining = Duration.zero;
           });
+          _loadAndDecryptMemories();
         } else {
           setState(() {
             _isUnlocked = false;
@@ -134,23 +181,72 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
       });
 
       if (unlocked) {
-        Future.delayed(const Duration(milliseconds: 300), () {
-          if (mounted) {
-            setState(() {
-              _showContent = true;
+        _showContent = true;
+        _loadAndDecryptMemories();
+      }
+    } on TimeoutException {
+      if (mounted) setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Loading timed out. Check connection.')),
+      );
+    } catch (e) {
+      if (mounted) setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load capsule: $e')),
+      );
+    }
+  }
+
+  Future<void> _loadAndDecryptMemories() async {
+    try {
+      final capsuleKey = CapsuleCryptoState.getCapsuleKey(widget.capsuleId);
+
+      final snapshot = await FirebaseFirestore.instance
+          .collection('capsules')
+          .doc(widget.capsuleId)
+          .collection('memories')
+          .orderBy('createdAt', descending: false)
+          .get()
+          .timeout(const Duration(seconds: 10));
+
+      final List<Map<String, dynamic>> decryptedMemories = [];
+
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        if (data['type'] == 'text' && data['content'] != null) {
+          try {
+            final decryptedText = await BoxedEncryptionService.decryptData(
+              encryptedText: data['content'],
+              capsuleKey: capsuleKey,
+            );
+            decryptedMemories.add({
+              ...data,
+              'decryptedContent': decryptedText,
+            });
+          } catch (_) {
+            decryptedMemories.add({
+              ...data,
+              'decryptedContent': '[Unable to decrypt]',
             });
           }
-        });
+        }
       }
-    } else {
-      setState(() => _loading = false);
+
+      if (mounted) setState(() => _memories = decryptedMemories);
+    } on TimeoutException {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Memories load timed out.')),
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to load memories: $e')),
+      );
     }
   }
 
   @override
   void dispose() {
     _timer?.cancel();
-    // ✅ STEP 6: clear decrypted capsule key from memory on exit
     CapsuleCryptoState.clearCapsuleKey(widget.capsuleId);
     super.dispose();
   }
@@ -174,13 +270,14 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
         body: const Center(child: CircularProgressIndicator()),
       );
     }
+
     return _isUnlocked ? _buildUnlockedView() : _buildLockedView();
   }
 
   Widget _buildLockedView() {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-    final textTheme = theme.textTheme;
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
     return Scaffold(
       backgroundColor: colorScheme.background,
       body: Center(
@@ -213,7 +310,8 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
                 Text(
                   'Unlocks on: ${DateFormat.yMMMd().add_jm().format(_unlockDate!)}',
                   style: TextStyle(
-                      color: colorScheme.onBackground.withOpacity(0.6)),
+                    color: colorScheme.onBackground.withOpacity(0.6),
+                  ),
                   textAlign: TextAlign.center,
                 ),
               const SizedBox(height: 18),
@@ -224,14 +322,7 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
               const SizedBox(height: 36),
               ElevatedButton(
                 onPressed: () => Navigator.pop(context),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: colorScheme.primary,
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                ),
-                child: const Text("Back", style: TextStyle(fontSize: 16)),
+                child: const Text("Back"),
               ),
             ],
           ),
@@ -268,7 +359,6 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // Capsule title centered at top with back button
                   AppBar(
                     backgroundColor: Colors.transparent,
                     elevation: 0,
@@ -289,44 +379,62 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
                     const SizedBox(height: 10),
                     Text(
                       _capsuleDescription!,
-                      style:
-                          textTheme.bodyMedium?.copyWith(color: Colors.white70),
+                      style: textTheme.bodyMedium?.copyWith(color: Colors.white70),
                       textAlign: TextAlign.center,
                     ),
                   ],
                   const SizedBox(height: 24),
-
                   Expanded(
-                    child: StreamBuilder<QuerySnapshot>(
-                      stream: FirebaseFirestore.instance
-                          .collection('capsules')
-                          .doc(widget.capsuleId)
-                          .collection('memories')
-                          .where('type', isEqualTo: 'image')
-                          .orderBy('createdAt', descending: false)
-                          .snapshots(),
-                      builder: (context, snapshot) {
-                        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                          return const SizedBox.shrink();
-                        }
+                    child: _memories.isEmpty
+                        ? Center(
+                            child: Text(
+                              'No memories yet!',
+                              style: textTheme.titleMedium?.copyWith(
+                                color: Colors.white70,
+                              ),
+                            ),
+                          )
+                        : ListView.builder(
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            itemCount: _memories.length,
+                            itemBuilder: (context, index) {
+                              final memory = _memories[index];
+                              final content =
+                                  (memory['decryptedContent'] ?? '').toString();
 
-                        final memories = snapshot.data!.docs;
-                        return ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: memories.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(width: 14),
-                          itemBuilder: (context, index) {
-                            final memory =
-                                memories[index].data() as Map<String, dynamic>;
-                            return _buildImageMemory(memory);
-                          },
-                        );
-                      },
-                    ),
+                              return Card(
+                                color: Colors.white.withOpacity(0.15),
+                                margin: const EdgeInsets.only(bottom: 12),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        content,
+                                        style: textTheme.bodyLarge?.copyWith(
+                                          color: Colors.white,
+                                        ),
+                                      ),
+                                      if (memory['createdAt'] != null) ...[
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          'Added: ${DateFormat('MMM dd, yyyy').format((memory['createdAt'] as Timestamp).toDate())}',
+                                          style: textTheme.bodySmall?.copyWith(
+                                            color: Colors.white70,
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
                   ),
-
-                 
                 ],
               ),
             ),
@@ -335,21 +443,4 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
       ),
     );
   }
-
-  Widget _buildImageMemory(Map<String, dynamic> memory) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: Image.network(
-        memory['content'] ?? '',
-        width: 150,
-        height: 150,
-        fit: BoxFit.cover,
-        loadingBuilder: (context, child, progress) {
-          if (progress == null) return child;
-          return const Center(child: CircularProgressIndicator());
-        },
-      ),
-    );
-  }
 }
-

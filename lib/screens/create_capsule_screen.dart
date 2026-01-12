@@ -1,12 +1,8 @@
-import 'dart:io';
-import 'dart:convert'; 
-
+import 'dart:convert';
 import 'package:boxed_app/services/boxed_encryption_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import 'package:boxed_app/controllers/capsule_controller.dart';
 
@@ -23,8 +19,6 @@ class CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
   final noteController = TextEditingController();
   DateTime? selectedDateTime;
   bool isLoading = false;
-  final List<File> selectedImages = [];
-  final ImagePicker picker = ImagePicker();
   int? selectedBackground;
   final List<String> backgroundOptions = [
     'assets/basic/background1.jpg',
@@ -41,13 +35,11 @@ class CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
       lastDate: DateTime(now.year + 5),
     );
     if (pickedDate == null) return;
-
     final pickedTime = await showTimePicker(
       context: context,
       initialTime: const TimeOfDay(hour: 12, minute: 0),
     );
     if (pickedTime == null) return;
-
     setState(() {
       selectedDateTime = DateTime(
         pickedDate.year,
@@ -56,19 +48,6 @@ class CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
         pickedTime.hour,
         pickedTime.minute,
       );
-    });
-  }
-
-  Future<void> pickImages() async {
-    final picked = await picker.pickMultiImage();
-    setState(() {
-      selectedImages.addAll(picked?.map((x) => File(x.path)) ?? []);
-    });
-  }
-
-  void removeImage(File file) {
-    setState(() {
-      selectedImages.remove(file);
     });
   }
 
@@ -87,9 +66,8 @@ class CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     setState(() => isLoading = true);
     try {
       final firestore = FirebaseFirestore.instance;
-      final storage = FirebaseStorage.instance;
 
-      // ✅ Generate capsule key and store as base64 string (Firestore-safe)
+      // Generate capsule key and store as base64 (Firestore-safe)
       final capsuleKey = await BoxedEncryptionService.generateCapsuleKey();
       final capsuleKeyBytes = await capsuleKey.extractBytes();
       final capsuleKeyBase64 = base64Encode(capsuleKeyBytes);
@@ -100,35 +78,23 @@ class CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
 
       // Create capsule doc (SOLO schema)
       await capsuleRef.set({
+        'capsuleId': capsuleId,
         'name': nameController.text.trim(),
         'description': descriptionController.text.trim(),
         'creatorId': user.uid,
         'unlockDate': Timestamp.fromDate(selectedDateTime!.toUtc()),
-        'capsuleKeys': {user.uid: capsuleKeyBase64}, // ✅ string, not SecretKey
+        'capsuleKeys': {user.uid: capsuleKeyBase64}, // string, not SecretKey
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
-        'emoji': '🔒',
+        'emoji': '',
         'backgroundId': selectedBackground,
         'isSurprise': false,
       });
 
-      // Upload images as memories
-      for (final image in selectedImages) {
-        final filename = DateTime.now().millisecondsSinceEpoch.toString();
-        final ref = storage.ref('capsules/$capsuleId/$filename.jpg');
-        final upload = await ref.putFile(image);
-        final url = await upload.ref.getDownloadURL();
-        await capsuleRef.collection('memories').add({
-          'type': 'image',
-          'content': url,
-          'createdBy': user.uid,
-          'createdAt': FieldValue.serverTimestamp(),
-        });
-      }
-
-      // Encrypted note as memory
+      // Encrypted note as memory (text-only)
       if (noteController.text.trim().isNotEmpty) {
-        final encryptedNote = await BoxedEncryptionService.encryptData(
+        final encryptedNote =
+            await BoxedEncryptionService.encryptData(
           plainText: noteController.text.trim(),
           capsuleKey: capsuleKey,
         );
@@ -167,14 +133,9 @@ class CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
             _input(nameController, 'Capsule name'),
             _input(descriptionController, 'Description', maxLines: 3),
             const SizedBox(height: 12),
-            GestureDetector(
-              onTap: selectDate,
-              child: _dateTile(),
-            ),
+            GestureDetector(onTap: selectDate, child: _dateTile()),
             const SizedBox(height: 16),
             _input(noteController, 'Write a note (optional)', maxLines: 3),
-            const SizedBox(height: 16),
-            _imagePicker(colorScheme),
             const SizedBox(height: 24),
             if (isLoading)
               const Center(child: CircularProgressIndicator())
@@ -192,22 +153,11 @@ class CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     );
   }
 
-  Widget _dateTile() {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Text(
-        selectedDateTime == null
-            ? 'Pick unlock date'
-            : 'Opens on ${selectedDateTime!.toLocal()}',
-      ),
-    );
-  }
-
-  Widget _input(TextEditingController c, String hint, {int maxLines = 1}) {
+  Widget _input(
+    TextEditingController c,
+    String hint, {
+    int maxLines = 1,
+  }) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: TextField(
@@ -222,38 +172,18 @@ class CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     );
   }
 
-  Widget _imagePicker(ColorScheme scheme) {
-    return Wrap(
-      spacing: 8,
-      children: [
-        ...selectedImages.map(
-          (img) => Stack(
-            children: [
-              Image.file(img, width: 80, height: 80, fit: BoxFit.cover),
-              Positioned(
-                right: 0,
-                child: IconButton(
-                  icon: const Icon(Icons.close, size: 16),
-                  onPressed: () => removeImage(img),
-                ),
-              ),
-            ],
-          ),
-        ),
-        GestureDetector(
-          onTap: pickImages,
-          child: Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              color: scheme.surface,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: scheme.outline),
-            ),
-            child: const Icon(Icons.add_a_photo),
-          ),
-        ),
-      ],
+  Widget _dateTile() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Text(
+        selectedDateTime == null
+            ? 'Pick unlock date'
+            : 'Opens on ${selectedDateTime!.toLocal()}',
+      ),
     );
   }
 }
