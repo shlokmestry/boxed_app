@@ -1,39 +1,44 @@
-import 'dart:typed_data';
+import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:boxed_app/services/encryption_service.dart';
+import 'package:cryptography/cryptography.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+
+import 'package:boxed_app/services/boxed_encryption_service.dart';
+import 'package:boxed_app/state/user_crypto_state.dart';
 
 class UnlockCapsuleScreen extends StatefulWidget {
   final String capsuleId;
 
-  const UnlockCapsuleScreen({super.key, required this.capsuleId});
+  const UnlockCapsuleScreen({
+    super.key,
+    required this.capsuleId,
+  });
 
   @override
   State<UnlockCapsuleScreen> createState() => _UnlockCapsuleScreenState();
 }
 
 class _UnlockCapsuleScreenState extends State<UnlockCapsuleScreen> {
-  List<String> decryptedMemories = [];
-  bool loading = true;
-  String? error;
+  final List<String> _decryptedNotes = [];
+  bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
     super.initState();
-    _unlockAndDecryptCapsule(widget.capsuleId);
+    _unlockAndDecrypt(widget.capsuleId);
   }
 
-  Future<void> _unlockAndDecryptCapsule(String capsuleId) async {
+  Future<void> _unlockAndDecrypt(String capsuleId) async {
     try {
       final userId = FirebaseAuth.instance.currentUser?.uid;
-
       if (userId == null) {
         setState(() {
-          error = 'User not logged in';
-          loading = false;
+          _error = 'User not logged in';
+          _loading = false;
         });
         return;
       }
@@ -41,77 +46,124 @@ class _UnlockCapsuleScreenState extends State<UnlockCapsuleScreen> {
       final capsuleDoc = await FirebaseFirestore.instance
           .collection('capsules')
           .doc(capsuleId)
-          .get();
+          .get()
+          .timeout(const Duration(seconds: 10));
 
       if (!capsuleDoc.exists) {
         setState(() {
-          error = 'Capsule not found';
-          loading = false;
+          _error = 'Capsule not found';
+          _loading = false;
         });
         return;
       }
 
-      final capsuleData = capsuleDoc.data()!;
-      final encryptedKeyBase64 = capsuleData['capsuleKeys']?[userId];
-
-      if (encryptedKeyBase64 == null) {
+      final capsuleData = capsuleDoc.data();
+      if (capsuleData == null) {
         setState(() {
-          error = 'You don’t have access to unlock this capsule.';
-          loading = false;
+          _error = 'Capsule data empty';
+          _loading = false;
         });
         return;
       }
 
-      final privateKeyPem = await EncryptionService.getPrivateKey();
-
-      if (privateKeyPem == null) {
+      final capsuleKeys = capsuleData['capsuleKeys'];
+      if (capsuleKeys is! Map) {
         setState(() {
-          error = 'Private key missing on this device.';
-          loading = false;
+          _error = 'capsuleKeys missing/invalid';
+          _loading = false;
         });
         return;
       }
 
-      final aesKey = EncryptionService.decryptCapsuleKey(
-        encryptedKeyBase64,
-        privateKeyPem,
-      );
+      final storedKeyValue = capsuleKeys[userId];
+      if (storedKeyValue is! String || storedKeyValue.isEmpty) {
+        setState(() {
+          _error = 'You don’t have access to unlock this capsule.';
+          _loading = false;
+        });
+        return;
+      }
 
+      // Decrypt capsule key (new format); fallback to legacy raw base64 bytes if needed.
+      SecretKey capsuleKey;
+      final userMasterKey = UserCryptoState.userMasterKeyOrNull;
+
+      if (userMasterKey != null) {
+        try {
+          capsuleKey = await BoxedEncryptionService.decryptCapsuleKeyForUser(
+            encryptedCapsuleKey: storedKeyValue,
+            userMasterKey: userMasterKey,
+          );
+        } catch (_) {
+          // Legacy fallback (old capsules stored raw base64 key bytes)
+          capsuleKey = SecretKey(_tryBase64(storedKeyValue));
+        }
+      } else {
+        // No master key loaded: only legacy fallback can work here.
+        try {
+          capsuleKey = SecretKey(_tryBase64(storedKeyValue));
+        } catch (_) {
+          setState(() {
+            _error = 'Master key missing. Please log in again.';
+            _loading = false;
+          });
+          return;
+        }
+      }
+
+      // Load text memories and decrypt "content"
       final memorySnapshot = await FirebaseFirestore.instance
           .collection('capsules')
           .doc(capsuleId)
           .collection('memories')
-          .get();
+          .where('type', isEqualTo: 'text')
+          .orderBy('createdAt', descending: false)
+          .get()
+          .timeout(const Duration(seconds: 10));
 
-      final List<String> tempDecrypted = [];
+      final List<String> out = [];
 
-      for (final doc in memorySnapshot.docs) {
-        final encryptedBase64 = doc.data()['encryptedBytes'];
-        if (encryptedBase64 == null) continue;
+      for (final d in memorySnapshot.docs) {
+        final data = d.data();
+        final encrypted = (data['content'] ?? '').toString();
+        if (encrypted.isEmpty) continue;
 
         try {
-          final encryptedBytes = Uint8List.fromList(base64Decode(encryptedBase64));
-          final decryptedBytes = EncryptionService.decryptDataAES(
-            encryptedBytes,
-            Uint8List.fromList(aesKey),
+          final clear = await BoxedEncryptionService.decryptData(
+            encryptedText: encrypted,
+            capsuleKey: capsuleKey,
           );
-          final result = utf8.decode(decryptedBytes);
-          tempDecrypted.add(result);
+          out.add(clear);
         } catch (_) {
-          tempDecrypted.add('📁 [Binary/Media Memory]');
+          out.add('[Unable to decrypt]');
         }
       }
 
+      if (!mounted) return;
       setState(() {
-        decryptedMemories = tempDecrypted;
-        loading = false;
+        _decryptedNotes
+          ..clear()
+          ..addAll(out);
+        _loading = false;
+      });
+    } on TimeoutException {
+      if (!mounted) return;
+      setState(() {
+        _error = 'Loading timed out.';
+        _loading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
-        error = 'Something went wrong: $e';
-        loading = false;
+        _error = 'Something went wrong: $e';
+        _loading = false;
       });
     }
+  }
+
+  List<int> _tryBase64(String s) {
+    // small helper so legacy fallback is explicit
+    return List<int>.from(base64Decode(s));
   }
 
   @override
@@ -122,44 +174,53 @@ class _UnlockCapsuleScreenState extends State<UnlockCapsuleScreen> {
     return Scaffold(
       backgroundColor: colorScheme.background,
       appBar: AppBar(
-        title: Text("🕰️ Capsule Memories", style: textTheme.titleMedium),
+        title: Text('Capsule Notes', style: textTheme.titleMedium),
         foregroundColor: colorScheme.primary,
         backgroundColor: colorScheme.background,
         elevation: 0,
       ),
-      body: loading
+      body: _loading
           ? const Center(child: CircularProgressIndicator())
-          : error != null
+          : (_error != null)
               ? Center(
                   child: Padding(
                     padding: const EdgeInsets.all(16),
                     child: Text(
-                      error!,
+                      _error!,
                       style: textTheme.bodyMedium?.copyWith(color: colorScheme.error),
                       textAlign: TextAlign.center,
                     ),
                   ),
                 )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(16),
-                  itemCount: decryptedMemories.length,
-                  itemBuilder: (context, index) => Card(
-                    color: colorScheme.surface,
-                    margin: const EdgeInsets.only(bottom: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: ListTile(
-                      leading: Icon(Icons.note, color: colorScheme.primary),
-                      title: Text(
-                        decryptedMemories[index],
-                        style: textTheme.bodyLarge?.copyWith(
-                          color: colorScheme.onSurface,
+              : (_decryptedNotes.isEmpty)
+                  ? Center(
+                      child: Text(
+                        'No notes found.',
+                        style: textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onBackground.withOpacity(0.7),
+                        ),
+                      ),
+                    )
+                  : ListView.builder(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _decryptedNotes.length,
+                      itemBuilder: (context, index) => Card(
+                        color: colorScheme.surface,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: ListTile(
+                          leading: Icon(Icons.note, color: colorScheme.primary),
+                          title: Text(
+                            _decryptedNotes[index],
+                            style: textTheme.bodyLarge?.copyWith(
+                              color: colorScheme.onSurface,
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ),
     );
   }
 }

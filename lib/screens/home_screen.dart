@@ -1,14 +1,21 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:cryptography/dart.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
+
+import 'package:boxed_app/controllers/capsule_controller.dart';
 
 import 'capsule_detail_screen.dart';
 import 'create_capsule_screen.dart';
 import 'profile_screen.dart';
 import 'settings_screen.dart';
-import 'collaborator_invites_screen.dart';
+
+import 'package:boxed_app/state/user_crypto_state.dart';
+import 'package:boxed_app/services/boxed_encryption_service.dart';
+
+
+
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -44,7 +51,9 @@ class _HomeScreenState extends State<HomeScreen> {
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (_) => const CreateCapsuleScreen()),
+            MaterialPageRoute(
+              builder: (_) => const CreateCapsuleScreen(),
+            ),
           );
         },
         backgroundColor: colorScheme.primary,
@@ -54,78 +63,102 @@ class _HomeScreenState extends State<HomeScreen> {
           ? Center(
               child: Text(
                 "Please sign in to view capsules",
-                style:
-                    textTheme.bodyLarge?.copyWith(color: colorScheme.onBackground),
+                style: textTheme.bodyLarge
+                    ?.copyWith(color: colorScheme.onBackground),
               ),
             )
-          : StreamBuilder<QuerySnapshot>(
-              stream: FirebaseFirestore.instance
-                  .collection('capsules')
-                  .where('memberIds', arrayContains: user.uid)
-                  .orderBy('createdAt', descending: true)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-
-                // Filter out capsules with status "declined"
-                final docs = snapshot.data!.docs.where((doc) {
-                  final data = doc.data() as Map<String, dynamic>;
-                  return data['status'] != 'declined';
-                }).toList();
-
-                if (docs.isEmpty) {
-                  return Center(
-                    child: Text(
-                      "No capsules found.",
-                      style: textTheme.bodyLarge?.copyWith(
-                        color: colorScheme.onBackground.withOpacity(0.7),
-                      ),
-                    ),
-                  );
-                }
-
-                return ListView.builder(
-                  itemCount: docs.length,
-                  padding: const EdgeInsets.all(16),
-                  itemBuilder: (context, index) {
-                    final doc = docs[index];
-                    final data = doc.data() as Map<String, dynamic>;
-
-                    final title = data['name'] ?? '';
-                    final emoji = data['emoji'] ?? '📦';
-                    final unlockDate = (data['unlockDate'] as Timestamp).toDate();
-                    final isUnlocked = DateTime.now().isAfter(unlockDate);
-                    final status = data['status'] ?? 'active';
-                    final isPending = status == 'pending';
-
-                    return CapsuleCard(
-                      title: title,
-                      emoji: emoji,
-                      unlockDate: unlockDate,
-                      isUnlocked: isUnlocked,
-                      isPending: isPending,
-                      onTap: isPending
-                          ? null // Disable tap if still pending
-                          : () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => CapsuleDetailScreen(
-                                    capsuleId: doc.id,
-                                  ),
-                                ),
-                              );
-                            },
-                    );
-                  },
-                );
-              },
-            ),
+          : _buildCapsulesBody(context),
     );
   }
 
+  /// ───────────── CAPSULE LIST (Controller-driven) ─────────────
+  Widget _buildCapsulesBody(BuildContext context) {
+    final controller = context.watch<CapsuleController>();
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+
+    switch (controller.state) {
+      case CapsuleLoadState.loading:
+        return const Center(
+          child: CircularProgressIndicator(),
+        );
+
+      case CapsuleLoadState.empty:
+        return Center(
+          child: Text(
+            "No capsules found.",
+            style: textTheme.bodyLarge?.copyWith(
+              color: colorScheme.onBackground.withOpacity(0.7),
+            ),
+          ),
+        );
+
+      case CapsuleLoadState.error:
+        return Center(
+          child: Text(
+            controller.error ?? "Something went wrong",
+            style: textTheme.bodyLarge?.copyWith(
+              color: Colors.redAccent,
+            ),
+          ),
+        );
+
+      case CapsuleLoadState.ready:
+      final capsules = controller.capsules;
+
+        if (capsules.isEmpty) {
+          return Center(
+            child: Text(
+              "No capsules found.",
+              style: textTheme.bodyLarge?.copyWith(
+                color: colorScheme.onBackground.withOpacity(0.7),
+              ),
+            ),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: capsules.length,
+          itemBuilder: (context, index) {
+            final data = capsules[index];
+
+            final title = data['name'] ?? '';
+            final emoji = data['emoji'] ?? '📦';
+          final unlockDate = (data['unlockDate'] as Timestamp).toDate();
+            final isUnlocked =
+                DateTime.now().isAfter(unlockDate);
+            final isPending = false;
+
+            return CapsuleCard(
+              title: title,
+              emoji: emoji,
+              unlockDate: unlockDate,
+              isUnlocked: isUnlocked,
+              isPending: isPending,
+              onTap: isPending
+                  ? null
+                  : () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              CapsuleDetailScreen(
+                            capsuleId: data['capsuleId'],
+                          ),
+                        ),
+                      );
+                    },
+            );
+          },
+        );
+
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  /// ───────────── DRAWER ─────────────
   Drawer _buildDrawer(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
@@ -160,35 +193,23 @@ class _HomeScreenState extends State<HomeScreen> {
                 Navigator.pop(context);
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                  MaterialPageRoute(
+                    builder: (_) => const ProfileScreen(),
+                  ),
                 );
               },
             ),
-            _DrawerButton(
-              icon: Icons.group_rounded,
-              label: 'Collaborators',
-              onTap: () {
-                Navigator.pop(context);
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const CollaboratorInvitesScreen()),
-                );
-              },
-            ),
-            _DrawerButton(
-              icon: Icons.group,
-              label: 'Shared With Me',
-              onTap: () {
-                Navigator.pop(context);
-                _showSnack(context, "Shared Capsules coming soon");
-              },
-            ),
+         
+            
             _DrawerButton(
               icon: Icons.color_lens_outlined,
               label: 'Themes',
               onTap: () {
                 Navigator.pop(context);
-                _showSnack(context, "Themes feature coming soon");
+                _showSnack(
+                  context,
+                  "Themes feature coming soon",
+                );
               },
             ),
             _DrawerButton(
@@ -198,21 +219,37 @@ class _HomeScreenState extends State<HomeScreen> {
                 Navigator.pop(context);
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                  MaterialPageRoute(
+                    builder: (_) =>
+                        const SettingsScreen(),
+                  ),
                 );
               },
             ),
             const Spacer(),
             _DrawerButton(
-              icon: Icons.logout,
-              label: 'Sign Out',
-              iconColor: Colors.redAccent,
-              textColor: Colors.redAccent,
-              onTap: () async {
-                Navigator.pop(context);
-                await FirebaseAuth.instance.signOut();
-              },
-            ),
+  icon: Icons.logout,
+  label: 'Sign Out',
+  iconColor: Colors.redAccent,
+  textColor: Colors.redAccent,
+  onTap: () async {
+    Navigator.pop(context);
+
+    // 1) Grab uid BEFORE signing out
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+
+    // 2) Clear persisted + in-memory crypto state
+    if (uid != null) {
+      await BoxedEncryptionService.clearUserMasterKey(uid);
+    }
+    UserCryptoState.clear();
+
+    // 3) Sign out + clear local UI state
+    await FirebaseAuth.instance.signOut();
+    context.read<CapsuleController>().clear();
+  },
+),
+
             const SizedBox(height: 20),
           ],
         ),
@@ -232,6 +269,7 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
+/// ───────────── CAPSULE CARD ─────────────
 class CapsuleCard extends StatelessWidget {
   final String title;
   final String emoji;
@@ -260,27 +298,33 @@ class CapsuleCard extends StatelessWidget {
         : 'Unlocks in ${_formatCountdown(unlockDate)}';
 
     return Opacity(
-      opacity: isPending ? 0.6 : 1.0, // Dim if pending
+      opacity: isPending ? 0.6 : 1.0,
       child: GestureDetector(
         onTap: onTap,
         child: Card(
           color: colorScheme.surface,
           margin: const EdgeInsets.only(bottom: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            padding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              mainAxisAlignment:
+                  MainAxisAlignment.spaceBetween,
               children: [
                 Expanded(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment:
+                        CrossAxisAlignment.start,
                     children: [
                       Text(
                         '$emoji $title',
                         style: textTheme.bodyLarge?.copyWith(
                           fontWeight: FontWeight.w600,
-                          color: colorScheme.onSurface,
                           fontSize: 17,
                         ),
                       ),
@@ -288,7 +332,8 @@ class CapsuleCard extends StatelessWidget {
                       Text(
                         unlockLabel,
                         style: textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurface.withOpacity(0.6),
+                          color: colorScheme.onSurface
+                              .withOpacity(0.6),
                           fontSize: 13,
                         ),
                       ),
@@ -297,7 +342,8 @@ class CapsuleCard extends StatelessWidget {
                         Text(
                           'Pending collaborators acceptance',
                           style: textTheme.bodySmall?.copyWith(
-                            color: Colors.orange.shade700,
+                            color:
+                                Colors.orange.shade700,
                             fontWeight: FontWeight.w600,
                             fontSize: 12,
                           ),
@@ -307,10 +353,13 @@ class CapsuleCard extends StatelessWidget {
                   ),
                 ),
                 Icon(
-                  isUnlocked ? Icons.lock_open_rounded : Icons.lock_outline,
+                  isUnlocked
+                      ? Icons.lock_open_rounded
+                      : Icons.lock_outline,
                   color: isUnlocked
                       ? Colors.greenAccent
-                      : colorScheme.onSurface.withOpacity(0.6),
+                      : colorScheme.onSurface
+                          .withOpacity(0.6),
                 ),
               ],
             ),
@@ -321,8 +370,7 @@ class CapsuleCard extends StatelessWidget {
   }
 
   String _formatCountdown(DateTime date) {
-    final now = DateTime.now();
-    final diff = date.difference(now);
+    final diff = date.difference(DateTime.now());
 
     if (diff.inDays > 0) {
       return '${diff.inDays} day${diff.inDays == 1 ? '' : 's'}';
@@ -355,11 +403,16 @@ class _DrawerButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final baseIconColor = iconColor ?? colorScheme.onSurface;
-    final baseTextColor = textColor ?? colorScheme.onSurface;
+    final baseIconColor =
+        iconColor ?? colorScheme.onSurface;
+    final baseTextColor =
+        textColor ?? colorScheme.onSurface;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 8,
+      ),
       child: GestureDetector(
         onTap: onTap,
         child: Container(
@@ -367,7 +420,10 @@ class _DrawerButton extends StatelessWidget {
             color: colorScheme.surface,
             borderRadius: BorderRadius.circular(12),
           ),
-          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+          padding: const EdgeInsets.symmetric(
+            vertical: 14,
+            horizontal: 16,
+          ),
           child: Row(
             children: [
               Icon(icon, color: baseIconColor),

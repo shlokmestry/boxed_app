@@ -7,12 +7,18 @@ class CapsuleCryptoState {
     _capsuleKeys[capsuleId] = key;
   }
 
+  /// Strict getter (throws if missing)
   static SecretKey getCapsuleKey(String capsuleId) {
     final key = _capsuleKeys[capsuleId];
     if (key == null) {
       throw Exception('Capsule key not loaded');
     }
     return key;
+  }
+
+  /// Safe getter (returns null if missing)
+  static SecretKey? getCapsuleKeyOrNull(String capsuleId) {
+    return _capsuleKeys[capsuleId];
   }
 
   static void clearCapsuleKey(String capsuleId) {
