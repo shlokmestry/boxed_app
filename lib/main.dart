@@ -4,7 +4,7 @@ import 'package:boxed_app/screens/splash_screen.dart';
 import 'package:boxed_app/screens/choose_username_screen.dart';
 import 'package:boxed_app/screens/login_signup.dart';
 import 'package:boxed_app/controllers/capsule_controller.dart';
-import 'package:boxed_app/state/user_crypto_state.dart'; // 🔐 crypto bootstrap
+// import 'package:boxed_app/state/user_crypto_state.dart';  // ❌ TEMP DISABLED for solo MVP
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -159,57 +159,53 @@ class MyApp extends StatelessWidget {
                 return const LoginSignup();
               }
 
-              // 🔐 Crypto bootstrap (must complete before app screens)
-              return FutureBuilder<void>(
-                future: UserCryptoState.initialize(user.uid),
-                builder: (context, cryptoSnapshot) {
-                  if (cryptoSnapshot.connectionState != ConnectionState.done) {
+              // 🚀 SOLO MVP: Skip crypto bootstrap (add back later)
+              // return FutureBuilder<void>(
+              //   future: UserCryptoState.initialize(user.uid),
+              //   ...
+
+              // Username check (no crypto needed for MVP)
+              return FutureBuilder<DocumentSnapshot>(
+                future: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(user.uid)
+                    .get(),
+                builder: (context, userDocSnapshot) {
+                  if (userDocSnapshot.connectionState != ConnectionState.done) {
                     return const Scaffold(
                       body: Center(child: CircularProgressIndicator()),
                     );
                   }
 
-                  if (cryptoSnapshot.hasError) {
-                    return const Scaffold(
-                      body: Center(child: Text('Failed to initialize encryption')),
+                  if (userDocSnapshot.hasError) {
+                    return Scaffold(
+                      body: Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Text('Failed to load profile'),
+                            ElevatedButton(
+                              onPressed: () => Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const LoginSignup(),
+                                ),
+                              ),
+                              child: const Text('Go to Login'),
+                            ),
+                          ],
+                        ),
+                      ),
                     );
                   }
 
-                  // Username check after crypto is ready
-                  return FutureBuilder<DocumentSnapshot>(
-                    future: FirebaseFirestore.instance
-                        .collection('users')
-                        .doc(user.uid)
-                        .get(),
-                    builder: (context, userDocSnapshot) {
-                      if (userDocSnapshot.connectionState !=
-                          ConnectionState.done) {
-                        return const Scaffold(
-                          body: Center(child: CircularProgressIndicator()),
-                        );
-                      }
+                  final data = userDocSnapshot.data?.data() as Map<String, dynamic>?;
 
-                      if (userDocSnapshot.hasError) {
-                        return const Scaffold(
-                          body: Center(child: Text('Failed to load profile')),
-                        );
-                      }
+                  final hasUsername = data != null &&
+                      data['username'] != null &&
+                      data['username'].toString().trim().isNotEmpty;
 
-                      final data = userDocSnapshot.data?.data()
-                          as Map<String, dynamic>?;
-
-                      final hasUsername = data != null &&
-                          data['username'] != null &&
-                          data['username']
-                              .toString()
-                              .trim()
-                              .isNotEmpty;
-
-                      return hasUsername
-                          ? const HomeScreen()
-                          : const ChooseUsernameScreen();
-                    },
-                  );
+                  return hasUsername ? const HomeScreen() : const ChooseUsernameScreen();
                 },
               );
             },
