@@ -31,13 +31,14 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
 
   Timer? _timer;
   Duration _remaining = Duration.zero;
-  bool _showContent = false;
   bool _isUnlocked = false;
   bool _loading = true;
 
-  List<Map<String, dynamic>> _memories = [];
+  // ✅ Text memories
+  List<Map<String, dynamic>> _textMemories = [];
+  bool _textLoading = false;
 
-  final List<String> _backgroundImages = [
+  final List<String> _backgroundImages = const [
     'assets/basic_background1.jpg',
     'assets/basic_background2.webp',
     'assets/basic_background3.jpg',
@@ -50,7 +51,6 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
   }
 
   Future<void> _fetchCapsuleDetails() async {
-    // Always start in loading state
     if (mounted) setState(() => _loading = true);
 
     try {
@@ -83,84 +83,100 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
         return;
       }
 
+      // ─────────────────────────────────────────────
+      // 1) Read capsule key for this user
+      // ─────────────────────────────────────────────
       final capsuleKeys = data['capsuleKeys'];
       if (capsuleKeys is! Map) {
         if (mounted) setState(() => _loading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('capsuleKeys is missing or invalid.')),
+          const SnackBar(content: Text('capsuleKeys missing/invalid.')),
         );
         return;
       }
 
-      final encryptedCapsuleKey = capsuleKeys[currentUser.uid];
-      if (encryptedCapsuleKey is! String || encryptedCapsuleKey.isEmpty) {
+      final storedKeyValue = capsuleKeys[currentUser.uid];
+      if (storedKeyValue is! String || storedKeyValue.isEmpty) {
         if (mounted) setState(() => _loading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No capsule key found for this user.')),
+          const SnackBar(content: Text('No capsule key for this user.')),
         );
         return;
       }
 
-      // ✅ Decrypt capsule key (two supported formats)
-      // 1) Preferred: decrypt using userMasterKey (AES-GCM SecretBox format)
-      // 2) Fallback (MVP): treat encryptedCapsuleKey as raw base64 key bytes
+      // ─────────────────────────────────────────────
+      // 2) Decrypt capsule key
+      //    - New capsules: encrypted SecretBox string (decrypt with master key)
+      //    - Old capsules: raw base64 key bytes (fallback)
+      // ─────────────────────────────────────────────
       SecretKey capsuleKey;
       final userMasterKey = UserCryptoState.userMasterKeyOrNull;
-
 
       if (userMasterKey != null) {
         try {
           capsuleKey = await BoxedEncryptionService.decryptCapsuleKeyForUser(
-            encryptedCapsuleKey: encryptedCapsuleKey,
+            encryptedCapsuleKey: storedKeyValue,
             userMasterKey: userMasterKey,
           );
         } catch (_) {
-          // Fallback to raw base64 key
-          final bytes = base64Decode(encryptedCapsuleKey);
-          capsuleKey = SecretKey(bytes);
+          capsuleKey = SecretKey(base64Decode(storedKeyValue));
         }
       } else {
-        final bytes = base64Decode(encryptedCapsuleKey);
-        capsuleKey = SecretKey(bytes);
+        try {
+          capsuleKey = SecretKey(base64Decode(storedKeyValue));
+        } catch (_) {
+          if (mounted) setState(() => _loading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Master key missing. Please log in again.')),
+          );
+          return;
+        }
       }
 
       CapsuleCryptoState.setCapsuleKey(widget.capsuleId, capsuleKey);
 
-      // Metadata
+      // ─────────────────────────────────────────────
+      // 3) Metadata + countdown
+      // ─────────────────────────────────────────────
       final ts = data['unlockDate'];
-      final title = data['name'];
-      final description = data['description'];
-      final bgId = data['backgroundId'];
-
       if (ts is! Timestamp) {
         if (mounted) setState(() => _loading = false);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('unlockDate is missing/invalid.')),
+          const SnackBar(content: Text('unlockDate missing/invalid.')),
         );
         return;
       }
 
       final date = ts.toDate();
       final now = DateTime.now();
-    final unlocked = !now.isBefore(date); 
-    final diff = date.difference(now);
+      final unlocked = !now.isBefore(date); // now >= date is unlocked
+
+      Duration diff = date.difference(now);
+      if (diff.isNegative) diff = Duration.zero;
 
       if (!mounted) return;
       setState(() {
         _unlockDate = date;
-        _capsuleTitle = (title ?? '').toString();
-        _capsuleDescription = (description ?? '').toString();
-        _backgroundId = bgId is int ? bgId : null;
-_remaining = diff.isNegative ? Duration.zero : diff;
+        _capsuleTitle = (data['name'] ?? '').toString();
+        _capsuleDescription = (data['description'] ?? '').toString();
+        _backgroundId = data['backgroundId'] is int ? data['backgroundId'] as int : null;
+        _remaining = diff;
         _isUnlocked = unlocked;
         _loading = false;
       });
 
+      // ✅ Load notes immediately if already unlocked
+      if (unlocked) {
+        _loadAndDecryptTextMemories();
+      }
+
       _timer?.cancel();
       _timer = Timer.periodic(const Duration(seconds: 1), (_) {
         final now = DateTime.now();
-        final unlockedNow = now.isAfter(date);
-        final newDuration = date.difference(now);
+        final unlockedNow = !now.isBefore(date);
+
+        Duration newDiff = date.difference(now);
+        if (newDiff.isNegative) newDiff = Duration.zero;
 
         if (!mounted) return;
 
@@ -168,26 +184,22 @@ _remaining = diff.isNegative ? Duration.zero : diff;
           _timer?.cancel();
           setState(() {
             _isUnlocked = true;
-            _showContent = true;
             _remaining = Duration.zero;
           });
-          _loadAndDecryptMemories();
+
+          // ✅ Load notes when it flips to unlocked
+          _loadAndDecryptTextMemories();
         } else {
           setState(() {
             _isUnlocked = false;
-            _remaining = newDuration;
+            _remaining = newDiff;
           });
         }
       });
-
-      if (unlocked) {
-        _showContent = true;
-        _loadAndDecryptMemories();
-      }
     } on TimeoutException {
       if (mounted) setState(() => _loading = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Loading timed out. Check connection.')),
+        const SnackBar(content: Text('Loading timed out.')),
       );
     } catch (e) {
       if (mounted) setState(() => _loading = false);
@@ -197,7 +209,12 @@ _remaining = diff.isNegative ? Duration.zero : diff;
     }
   }
 
-  Future<void> _loadAndDecryptMemories() async {
+  Future<void> _loadAndDecryptTextMemories() async {
+    if (_textLoading) return;
+    if (!mounted) return;
+
+    setState(() => _textLoading = true);
+
     try {
       final capsuleKey = CapsuleCryptoState.getCapsuleKey(widget.capsuleId);
 
@@ -205,42 +222,31 @@ _remaining = diff.isNegative ? Duration.zero : diff;
           .collection('capsules')
           .doc(widget.capsuleId)
           .collection('memories')
+          .where('type', isEqualTo: 'text')
           .orderBy('createdAt', descending: false)
-          .get()
-          .timeout(const Duration(seconds: 10));
+          .get();
 
-      final List<Map<String, dynamic>> decryptedMemories = [];
+      final List<Map<String, dynamic>> out = [];
 
-      for (final doc in snapshot.docs) {
-        final data = doc.data();
-        if (data['type'] == 'text' && data['content'] != null) {
-          try {
-            final decryptedText = await BoxedEncryptionService.decryptData(
-              encryptedText: data['content'],
-              capsuleKey: capsuleKey,
-            );
-            decryptedMemories.add({
-              ...data,
-              'decryptedContent': decryptedText,
-            });
-          } catch (_) {
-            decryptedMemories.add({
-              ...data,
-              'decryptedContent': '[Unable to decrypt]',
-            });
-          }
+      for (final d in snapshot.docs) {
+        final data = d.data();
+        final encrypted = (data['content'] ?? '').toString();
+        if (encrypted.isEmpty) continue;
+
+        try {
+          final clear = await BoxedEncryptionService.decryptData(
+            encryptedText: encrypted,
+            capsuleKey: capsuleKey,
+          );
+          out.add({...data, 'decryptedContent': clear});
+        } catch (_) {
+          out.add({...data, 'decryptedContent': '[Unable to decrypt]'});
         }
       }
 
-      if (mounted) setState(() => _memories = decryptedMemories);
-    } on TimeoutException {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Memories load timed out.')),
-      );
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to load memories: $e')),
-      );
+      if (mounted) setState(() => _textMemories = out);
+    } finally {
+      if (mounted) setState(() => _textLoading = false);
     }
   }
 
@@ -262,7 +268,6 @@ _remaining = diff.isNegative ? Duration.zero : diff;
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
 
     if (_loading) {
       return Scaffold(
@@ -297,7 +302,7 @@ _remaining = diff.isNegative ? Duration.zero : diff;
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 10),
-              if (_capsuleTitle != null)
+              if (_capsuleTitle != null && _capsuleTitle!.trim().isNotEmpty)
                 Text(
                   _capsuleTitle!,
                   style: textTheme.titleMedium?.copyWith(
@@ -309,9 +314,7 @@ _remaining = diff.isNegative ? Duration.zero : diff;
               if (_unlockDate != null)
                 Text(
                   'Unlocks on: ${DateFormat.yMMMd().add_jm().format(_unlockDate!)}',
-                  style: TextStyle(
-                    color: colorScheme.onBackground.withOpacity(0.6),
-                  ),
+                  style: TextStyle(color: colorScheme.onBackground.withOpacity(0.6)),
                   textAlign: TextAlign.center,
                 ),
               const SizedBox(height: 18),
@@ -322,7 +325,14 @@ _remaining = diff.isNegative ? Duration.zero : diff;
               const SizedBox(height: 36),
               ElevatedButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text("Back"),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: colorScheme.primary,
+                  padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text("Back", style: TextStyle(fontSize: 16)),
               ),
             ],
           ),
@@ -355,7 +365,7 @@ _remaining = diff.isNegative ? Duration.zero : diff;
           ),
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 80),
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
@@ -375,7 +385,8 @@ _remaining = diff.isNegative ? Duration.zero : diff;
                       onPressed: () => Navigator.pop(context),
                     ),
                   ),
-                  if (_capsuleDescription != null) ...[
+                  if (_capsuleDescription != null &&
+                      _capsuleDescription!.trim().isNotEmpty) ...[
                     const SizedBox(height: 10),
                     Text(
                       _capsuleDescription!,
@@ -383,63 +394,112 @@ _remaining = diff.isNegative ? Duration.zero : diff;
                       textAlign: TextAlign.center,
                     ),
                   ],
-                  const SizedBox(height: 24),
-                  Expanded(
-                    child: _memories.isEmpty
-                        ? Center(
-                            child: Text(
-                              'No memories yet!',
-                              style: textTheme.titleMedium?.copyWith(
-                                color: Colors.white70,
-                              ),
-                            ),
-                          )
-                        : ListView.builder(
-                            padding: const EdgeInsets.symmetric(horizontal: 8),
-                            itemCount: _memories.length,
-                            itemBuilder: (context, index) {
-                              final memory = _memories[index];
-                              final content =
-                                  (memory['decryptedContent'] ?? '').toString();
+                  const SizedBox(height: 16),
 
-                              return Card(
-                                color: Colors.white.withOpacity(0.15),
-                                margin: const EdgeInsets.only(bottom: 12),
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(12),
+                  // ✅ Images (fixed height)
+                  SizedBox(
+                    height: 170,
+                    child: StreamBuilder<QuerySnapshot>(
+                      stream: FirebaseFirestore.instance
+                          .collection('capsules')
+                          .doc(widget.capsuleId)
+                          .collection('memories')
+                          .where('type', isEqualTo: 'image')
+                          .orderBy('createdAt', descending: false)
+                          .snapshots(),
+                      builder: (context, snapshot) {
+                        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+                          return Center(
+                            child: Text(
+                              'No images yet.',
+                              style: textTheme.titleMedium?.copyWith(color: Colors.white70),
+                            ),
+                          );
+                        }
+
+                        final memories = snapshot.data!.docs;
+
+                        return ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: memories.length,
+                          separatorBuilder: (_, __) => const SizedBox(width: 14),
+                          itemBuilder: (context, index) {
+                            final memory =
+                                memories[index].data() as Map<String, dynamic>;
+                            return _buildImageMemory(memory);
+                          },
+                        );
+                      },
+                    ),
+                  ),
+
+                  const SizedBox(height: 18),
+
+                  Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      'Notes',
+                      style: textTheme.titleMedium?.copyWith(color: Colors.white),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // ✅ Notes list
+                  Expanded(
+                    child: _textLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : _textMemories.isEmpty
+                            ? Align(
+                                alignment: Alignment.topLeft,
+                                child: Text(
+                                  'No notes yet.',
+                                  style: textTheme.bodyMedium
+                                      ?.copyWith(color: Colors.white70),
                                 ),
-                                child: Padding(
-                                  padding: const EdgeInsets.all(16),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        content,
-                                        style: textTheme.bodyLarge?.copyWith(
-                                          color: Colors.white,
-                                        ),
+                              )
+                            : ListView.builder(
+                                itemCount: _textMemories.length,
+                                itemBuilder: (context, i) {
+                                  final m = _textMemories[i];
+                                  final text =
+                                      (m['decryptedContent'] ?? '').toString();
+
+                                  return Card(
+                                    color: Colors.white.withOpacity(0.12),
+                                    margin: const EdgeInsets.only(bottom: 10),
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(12),
+                                      child: Text(
+                                        text,
+                                        style: textTheme.bodyMedium
+                                            ?.copyWith(color: Colors.white),
                                       ),
-                                      if (memory['createdAt'] != null) ...[
-                                        const SizedBox(height: 8),
-                                        Text(
-                                          'Added: ${DateFormat('MMM dd, yyyy').format((memory['createdAt'] as Timestamp).toDate())}',
-                                          style: textTheme.bodySmall?.copyWith(
-                                            color: Colors.white70,
-                                          ),
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                              );
-                            },
-                          ),
+                                    ),
+                                  );
+                                },
+                              ),
                   ),
                 ],
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildImageMemory(Map<String, dynamic> memory) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Image.network(
+        (memory['content'] ?? '').toString(),
+        width: 150,
+        height: 150,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, progress) {
+          if (progress == null) return child;
+          return const Center(child: CircularProgressIndicator());
+        },
       ),
     );
   }

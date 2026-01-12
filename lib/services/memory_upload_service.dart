@@ -13,7 +13,7 @@ class MemoryUploadService {
   }) async {
     final encData = EncryptionService.encryptDataAES(plainData, aesKey);
     final ref = FirebaseStorage.instance.ref().child("capsules/$capsuleId/$fileName");
-    final uploadTask = await ref.putData(encData);
+    final uploadTask = await ref.putData(encData as Uint8List);
     return await uploadTask.ref.getDownloadURL();
   }
 }

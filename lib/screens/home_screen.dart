@@ -11,6 +11,10 @@ import 'create_capsule_screen.dart';
 import 'profile_screen.dart';
 import 'settings_screen.dart';
 
+import 'package:boxed_app/state/user_crypto_state.dart';
+import 'package:boxed_app/services/boxed_encryption_service.dart';
+
+
 
 
 class HomeScreen extends StatefulWidget {
@@ -224,18 +228,28 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const Spacer(),
             _DrawerButton(
-              icon: Icons.logout,
-              label: 'Sign Out',
-              iconColor: Colors.redAccent,
-              textColor: Colors.redAccent,
-              onTap: () async {
-                Navigator.pop(context);
-                await FirebaseAuth.instance.signOut();
-                context
-                    .read<CapsuleController>()
-                    .clear();
-              },
-            ),
+  icon: Icons.logout,
+  label: 'Sign Out',
+  iconColor: Colors.redAccent,
+  textColor: Colors.redAccent,
+  onTap: () async {
+    Navigator.pop(context);
+
+    // 1) Grab uid BEFORE signing out
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+
+    // 2) Clear persisted + in-memory crypto state
+    if (uid != null) {
+      await BoxedEncryptionService.clearUserMasterKey(uid);
+    }
+    UserCryptoState.clear();
+
+    // 3) Sign out + clear local UI state
+    await FirebaseAuth.instance.signOut();
+    context.read<CapsuleController>().clear();
+  },
+),
+
             const SizedBox(height: 20),
           ],
         ),

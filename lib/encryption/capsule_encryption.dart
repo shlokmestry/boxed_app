@@ -1,59 +1,45 @@
 import 'dart:convert';
-import 'dart:typed_data';
-import 'package:encrypt/encrypt.dart';
-import 'package:encrypt/encrypt.dart' as encrypt;
+
+import 'package:cryptography/cryptography.dart';
+import 'package:boxed_app/services/boxed_encryption_service.dart';
 
 class CapsuleEncryption {
-  /// Generate a new AES 256-bit key (base64)
-  static String generateAESKey() {
-    final key = Key.fromSecureRandom(32); // 256-bit key
-    return key.base64;
+  /// Generate a new AES-256 key (base64)
+  static Future<String> generateAESKey() async {
+    final key = await BoxedEncryptionService.generateCapsuleKey();
+    final bytes = await key.extractBytes();
+    return base64Encode(bytes);
   }
 
-  /// Encrypt memory using AES-256 with a random IV
-  /// Format: base64(IV + ciphertext)
-  static String encryptMemory(String plainText, String base64Key) {
+  /// Encrypt memory using the BoxedEncryptionService format (AES-GCM SecretBox encoded as base64 string)
+  static Future<String> encryptMemory(String plainText, String base64Key) async {
     try {
-      final key = Key.fromBase64(base64Key.trim());
-      final iv = IV.fromSecureRandom(16); // 128-bit IV
+      final keyBytes = base64Decode(base64Key.trim());
+      final capsuleKey = SecretKey(keyBytes);
 
-      final encrypter = Encrypter(AES(key, mode: AESMode.cbc, padding: 'PKCS7'));
-      final encrypted = encrypter.encrypt(plainText, iv: iv);
-
-      // Combine IV and encrypted bytes together
-      final combinedBytes = iv.bytes + encrypted.bytes;
-      return base64Encode(combinedBytes);
+      return await BoxedEncryptionService.encryptData(
+        plainText: plainText,
+        capsuleKey: capsuleKey,
+      );
     } catch (e) {
+      // ignore: avoid_print
       print('encryption error: $e');
       throw Exception('Encryption failed: $e');
     }
   }
 
-  /// Decrypt memory from base64(IV + ciphertext)
-  static String decryptMemory(String encryptedText, String base64Key) {
+  /// Decrypt memory produced by encryptMemory() above (AES-GCM SecretBox encoded as base64 string)
+  static Future<String> decryptMemory(String encryptedText, String base64Key) async {
     try {
-      final key = encrypt.Key.fromBase64(base64Key.trim());
-      final decodedBytes = base64Decode(encryptedText.trim());
+      final keyBytes = base64Decode(base64Key.trim());
+      final capsuleKey = SecretKey(keyBytes);
 
-      if (decodedBytes.length < 16) {
-        throw Exception('Encrypted payload is too short to contain IV.');
-      }
-
-      // Extract IV (first 16 bytes) and ciphertext
-      final iv = encrypt.IV(decodedBytes.sublist(0, 16));
-      final cipher = decodedBytes.sublist(16);
-
-      final encrypter = encrypt.Encrypter(
-        encrypt.AES(key, mode: AESMode.cbc, padding: 'PKCS7'),
+      return await BoxedEncryptionService.decryptData(
+        encryptedText: encryptedText.trim(),
+        capsuleKey: capsuleKey,
       );
-
-      final decrypted = encrypter.decrypt(
-        encrypt.Encrypted(cipher),
-        iv: iv,
-      );
-
-      return decrypted;
     } catch (e) {
+      // ignore: avoid_print
       print('decryption error: $e');
       throw Exception('Decryption failed: $e');
     }

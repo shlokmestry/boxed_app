@@ -4,7 +4,7 @@ import 'package:boxed_app/screens/splash_screen.dart';
 import 'package:boxed_app/screens/choose_username_screen.dart';
 import 'package:boxed_app/screens/login_signup.dart';
 import 'package:boxed_app/controllers/capsule_controller.dart';
-// import 'package:boxed_app/state/user_crypto_state.dart';  // ❌ TEMP DISABLED for solo MVP
+import 'package:boxed_app/state/user_crypto_state.dart'; // ✅ ENABLED
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -159,53 +159,69 @@ class MyApp extends StatelessWidget {
                 return const LoginSignup();
               }
 
-              // 🚀 SOLO MVP: Skip crypto bootstrap (add back later)
-              // return FutureBuilder<void>(
-              //   future: UserCryptoState.initialize(user.uid),
-              //   ...
-
-              // Username check (no crypto needed for MVP)
-              return FutureBuilder<DocumentSnapshot>(
-                future: FirebaseFirestore.instance
-                    .collection('users')
-                    .doc(user.uid)
-                    .get(),
-                builder: (context, userDocSnapshot) {
-                  if (userDocSnapshot.connectionState != ConnectionState.done) {
+              // ✅ Crypto bootstrap is REQUIRED for capsule decryption
+              return FutureBuilder<void>(
+                future: UserCryptoState.initialize(user.uid),
+                builder: (context, cryptoSnapshot) {
+                  if (cryptoSnapshot.connectionState != ConnectionState.done) {
                     return const Scaffold(
                       body: Center(child: CircularProgressIndicator()),
                     );
                   }
 
-                  if (userDocSnapshot.hasError) {
-                    return Scaffold(
-                      body: Center(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            const Text('Failed to load profile'),
-                            ElevatedButton(
-                              onPressed: () => Navigator.pushReplacement(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (_) => const LoginSignup(),
-                                ),
-                              ),
-                              child: const Text('Go to Login'),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
+                  // If we can't load a persisted master key, force login again
+                  if (cryptoSnapshot.hasError) {
+                    return const LoginSignup();
                   }
 
-                  final data = userDocSnapshot.data?.data() as Map<String, dynamic>?;
+                  // Username check
+                  return FutureBuilder<DocumentSnapshot>(
+                    future: FirebaseFirestore.instance
+                        .collection('users')
+                        .doc(user.uid)
+                        .get(),
+                    builder: (context, userDocSnapshot) {
+                      if (userDocSnapshot.connectionState !=
+                          ConnectionState.done) {
+                        return const Scaffold(
+                          body: Center(child: CircularProgressIndicator()),
+                        );
+                      }
 
-                  final hasUsername = data != null &&
-                      data['username'] != null &&
-                      data['username'].toString().trim().isNotEmpty;
+                      if (userDocSnapshot.hasError) {
+                        return Scaffold(
+                          body: Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const Text('Failed to load profile'),
+                                ElevatedButton(
+                                  onPressed: () => Navigator.pushReplacement(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => const LoginSignup(),
+                                    ),
+                                  ),
+                                  child: const Text('Go to Login'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }
 
-                  return hasUsername ? const HomeScreen() : const ChooseUsernameScreen();
+                      final data = userDocSnapshot.data?.data()
+                          as Map<String, dynamic>?;
+
+                      final hasUsername = data != null &&
+                          data['username'] != null &&
+                          data['username'].toString().trim().isNotEmpty;
+
+                      return hasUsername
+                          ? const HomeScreen()
+                          : const ChooseUsernameScreen();
+                    },
+                  );
                 },
               );
             },

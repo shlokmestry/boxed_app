@@ -5,7 +5,6 @@ class UserCryptoState {
   static SecretKey? _userMasterKey;
 
   /// ✅ Nullable accessor (does NOT throw)
-  /// Use this in screens where you want to show a message instead of crashing.
   static SecretKey? get userMasterKeyOrNull => _userMasterKey;
 
   /// 🔐 LOGIN / SIGNUP ONLY
@@ -26,7 +25,6 @@ class UserCryptoState {
     if (_userMasterKey != null) return;
 
     final storedKey = await BoxedEncryptionService.loadUserMasterKey(userId);
-
     if (storedKey == null) {
       throw Exception('User master key not found. User must log in again.');
     }

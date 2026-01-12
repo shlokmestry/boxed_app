@@ -1,71 +1,105 @@
-import 'dart:typed_data';
 import 'dart:math';
-import 'package:rsa_encrypt/rsa_encrypt.dart'; 
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:pointycastle/export.dart' as pc;
-import 'package:encrypt/encrypt.dart' as encrypt;
+import 'dart:typed_data';
+
+import 'package:cryptography/cryptography.dart';
+import 'package:boxed_app/services/boxed_encryption_service.dart';
 
 class EncryptionService {
-  static final _storage = FlutterSecureStorage();
-  static final _helper = RsaKeyHelper(); 
+  static final AesGcm _aesGcm = AesGcm.with256bits();
+  static final Random _rng = Random.secure();
 
-  
-  static Future<void> generateAndStoreKeyPair(String userId) async {
-    final keyPair = await _helper.computeRSAKeyPair(_helper.getSecureRandom());
-    final pubPem = _helper.encodePublicKeyToPemPKCS1(keyPair.publicKey as pc.RSAPublicKey);
-    final privPem = _helper.encodePrivateKeyToPemPKCS1(keyPair.privateKey as pc.RSAPrivateKey);
-
-    // Save private key securely on device
-    await _storage.write(key: 'privateKey', value: privPem);
-
-    // Save public key in Firestore
-    await FirebaseFirestore.instance.collection('users').doc(userId).set({
-      'publicKey': pubPem,
-    }, SetOptions(merge: true));
-  }
-
-  
-  static Future<String?> getPrivateKey() async {
-    return await _storage.read(key: 'privateKey');
-  }
-
+  /// Generates a random 32-byte AES key.
   static Uint8List generateAesKey() {
-    final rng = Random.secure();
-    return Uint8List.fromList(List.generate(32, (_) => rng.nextInt(256)));
+    return Uint8List.fromList(List<int>.generate(32, (_) => _rng.nextInt(256)));
   }
 
-  /// ✅ Encrypt content with AES key + random IV (returns [IV + encrypted data])
-  static Uint8List encryptDataAES(Uint8List plainData, Uint8List aesKey) {
-    final key = encrypt.Key(aesKey);
-    final iv = encrypt.IV.fromSecureRandom(16);
-    final encrypter = encrypt.Encrypter(encrypt.AES(key));
-    final encrypted = encrypter.encryptBytes(plainData, iv: iv);
-    return Uint8List.fromList(iv.bytes + encrypted.bytes); // [IV][Ciphertext]
+  /// Encrypt bytes using AES-GCM.
+  ///
+  /// Output format (binary): [nonce(12 bytes)] + [cipherText(N)] + [mac(16 bytes)]
+  static Future<Uint8List> encryptDataAES(
+    Uint8List plainData,
+    Uint8List aesKey,
+  ) async {
+    if (aesKey.length != 32) {
+      throw Exception('AES key must be 32 bytes (256-bit).');
+    }
+
+    final nonce = Uint8List.fromList(List<int>.generate(12, (_) => _rng.nextInt(256)));
+    final secretKey = SecretKey(aesKey);
+
+    final box = await _aesGcm.encrypt(
+      plainData,
+      secretKey: secretKey,
+      nonce: nonce,
+    );
+
+    return Uint8List.fromList([
+      ...box.nonce,
+      ...box.cipherText,
+      ...box.mac.bytes,
+    ]);
   }
 
-  /// ✅ Decrypt AES-encrypted content (extracts IV)
-  static List<int> decryptDataAES(Uint8List encryptedData, Uint8List aesKey) {
-    final iv = encrypt.IV(encryptedData.sublist(0, 16));
-    final cipherText = encryptedData.sublist(16);
-    final key = encrypt.Key(aesKey);
-    final encrypter = encrypt.Encrypter(encrypt.AES(key));
-    return encrypter.decryptBytes(encrypt.Encrypted(cipherText), iv: iv);
+  /// Decrypt bytes produced by encryptDataAES().
+  static Future<Uint8List> decryptDataAES(
+    Uint8List encryptedData,
+    Uint8List aesKey,
+  ) async {
+    if (aesKey.length != 32) {
+      throw Exception('AES key must be 32 bytes (256-bit).');
+    }
+    if (encryptedData.length < 12 + 16) {
+      throw Exception('Encrypted payload too short.');
+    }
+
+    final nonce = encryptedData.sublist(0, 12);
+    final macBytes = encryptedData.sublist(encryptedData.length - 16);
+    final cipherText = encryptedData.sublist(12, encryptedData.length - 16);
+
+    final box = SecretBox(
+      cipherText,
+      nonce: nonce,
+      mac: Mac(macBytes),
+    );
+
+    final clear = await _aesGcm.decrypt(
+      box,
+      secretKey: SecretKey(aesKey),
+    );
+
+    return Uint8List.fromList(clear);
   }
 
-  /// ✅ Encrypt AES capsule key using recipient's RSA public key
-  static String encryptCapsuleKeyForUser(Uint8List aesKey, String userPublicKeyPem) {
-    final parser = encrypt.RSAKeyParser();
-    final publicKey = parser.parse(userPublicKeyPem) as pc.RSAPublicKey;
-    final encrypter = encrypt.Encrypter(encrypt.RSA(publicKey: publicKey));
-    return encrypter.encryptBytes(aesKey).base64;
+  /// Encrypt (wrap) a capsule AES key for storage using the user's master key.
+  ///
+  /// Returns a Firestore-safe String (SecretBox JSON base64) via BoxedEncryptionService.
+  static Future<String> encryptCapsuleKeyForUser({
+    required Uint8List capsuleAesKey,
+    required SecretKey userMasterKey,
+  }) async {
+    if (capsuleAesKey.length != 32) {
+      throw Exception('Capsule key must be 32 bytes (256-bit).');
+    }
+
+    return BoxedEncryptionService.encryptCapsuleKeyForUser(
+      capsuleKey: SecretKey(capsuleAesKey),
+      userMasterKey: userMasterKey,
+    );
   }
 
-  /// ✅ Decrypt AES capsule key using current user's private RSA key
-  static List<int> decryptCapsuleKey(String encryptedBase64, String privateKeyPem) {
-    final parser = encrypt.RSAKeyParser();
-    final privateKey = parser.parse(privateKeyPem) as pc.RSAPrivateKey;
-    final encrypter = encrypt.Encrypter(encrypt.RSA(privateKey: privateKey));
-    return encrypter.decryptBytes(encrypt.Encrypted.fromBase64(encryptedBase64));
+  /// Decrypt (unwrap) a capsule AES key from storage using the user's master key.
+  ///
+  /// Returns the raw 32-byte AES key.
+  static Future<Uint8List> decryptCapsuleKeyForUser({
+    required String encryptedCapsuleKey,
+    required SecretKey userMasterKey,
+  }) async {
+    final key = await BoxedEncryptionService.decryptCapsuleKeyForUser(
+      encryptedCapsuleKey: encryptedCapsuleKey,
+      userMasterKey: userMasterKey,
+    );
+
+    final bytes = await key.extractBytes();
+    return Uint8List.fromList(bytes);
   }
 }

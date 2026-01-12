@@ -1,4 +1,4 @@
-import 'dart:convert';
+import 'package:boxed_app/state/user_crypto_state.dart';
 import 'package:boxed_app/services/boxed_encryption_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -20,6 +20,7 @@ class CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
   DateTime? selectedDateTime;
   bool isLoading = false;
   int? selectedBackground;
+
   final List<String> backgroundOptions = [
     'assets/basic/background1.jpg',
     'assets/basic/background2.webp',
@@ -35,11 +36,13 @@ class CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
       lastDate: DateTime(now.year + 5),
     );
     if (pickedDate == null) return;
+
     final pickedTime = await showTimePicker(
       context: context,
       initialTime: const TimeOfDay(hour: 12, minute: 0),
     );
     if (pickedTime == null) return;
+
     setState(() {
       selectedDateTime = DateTime(
         pickedDate.year,
@@ -53,6 +56,7 @@ class CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
 
   Future<void> createCapsule() async {
     final user = FirebaseAuth.instance.currentUser;
+
     if (user == null ||
         nameController.text.trim().isEmpty ||
         descriptionController.text.trim().isEmpty ||
@@ -64,13 +68,25 @@ class CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     }
 
     setState(() => isLoading = true);
+
     try {
       final firestore = FirebaseFirestore.instance;
 
-      // Generate capsule key and store as base64 (Firestore-safe)
+      // ✅ Must have master key to encrypt capsule key for storage
+      final userMasterKey = UserCryptoState.userMasterKeyOrNull;
+      if (userMasterKey == null) {
+        throw Exception('Master key missing. Please log in again.');
+      }
+
+      // Generate capsule key (used to encrypt memories/notes)
       final capsuleKey = await BoxedEncryptionService.generateCapsuleKey();
-      final capsuleKeyBytes = await capsuleKey.extractBytes();
-      final capsuleKeyBase64 = base64Encode(capsuleKeyBytes);
+
+      // ✅ Encrypt capsule key for this user (stored in Firestore)
+      final encryptedCapsuleKey =
+          await BoxedEncryptionService.encryptCapsuleKeyForUser(
+        capsuleKey: capsuleKey,
+        userMasterKey: userMasterKey,
+      );
 
       // Solo capsule - always active, no collaborators
       final capsuleRef = firestore.collection('capsules').doc();
@@ -83,7 +99,7 @@ class CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
         'description': descriptionController.text.trim(),
         'creatorId': user.uid,
         'unlockDate': Timestamp.fromDate(selectedDateTime!.toUtc()),
-        'capsuleKeys': {user.uid: capsuleKeyBase64}, // string, not SecretKey
+        'capsuleKeys': {user.uid: encryptedCapsuleKey}, // ✅ encrypted SecretBox
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
         'emoji': '',
@@ -93,11 +109,11 @@ class CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
 
       // Encrypted note as memory (text-only)
       if (noteController.text.trim().isNotEmpty) {
-        final encryptedNote =
-            await BoxedEncryptionService.encryptData(
+        final encryptedNote = await BoxedEncryptionService.encryptData(
           plainText: noteController.text.trim(),
           capsuleKey: capsuleKey,
         );
+
         await capsuleRef.collection('memories').add({
           'type': 'text',
           'content': encryptedNote,
@@ -123,6 +139,7 @@ class CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Create Capsule')),
       body: SingleChildScrollView(
