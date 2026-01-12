@@ -31,9 +31,6 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
   bool _isUnlocked = false;
   bool _loading = true;
 
-  // Stub for collaborators - replace with actual fetch if needed
-  List<String> _collaborators = [];
-
   final List<String> _backgroundImages = [
     'assets/basic_background1.jpg',
     'assets/basic_background2.webp',
@@ -44,15 +41,9 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
   void initState() {
     super.initState();
     _fetchCapsuleDetails();
-    _fetchCollaborators();
+
   }
 
-  void _fetchCollaborators() {
-    // TODO: Fetch collaborators from Firestore and update _collaborators list
-    // For demo, we simulate no collaborators or some collaborators
-    // Example:
-    // setState(() => _collaborators = ['Anna', 'Bob', 'Chris']);
-  }
 
   void _fetchCapsuleDetails() async {
     final doc = await FirebaseFirestore.instance
@@ -312,7 +303,7 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
                           .doc(widget.capsuleId)
                           .collection('memories')
                           .where('type', isEqualTo: 'image')
-                          .orderBy('timestamp', descending: false)
+                          .orderBy('createdAt', descending: false)
                           .snapshots(),
                       builder: (context, snapshot) {
                         if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
@@ -335,25 +326,7 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
                     ),
                   ),
 
-                  if (_collaborators.isNotEmpty || _unlockDate != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 16),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          if (_collaborators.isNotEmpty)
-                            _CollaboratorAvatars(
-                              collaborators: _collaborators,
-                            ),
-                          if (_unlockDate != null)
-                            Text(
-                              'Unlocked on: ${DateFormat.yMMMd().add_jm().format(_unlockDate!)}',
-                              style: textTheme.bodySmall
-                                  ?.copyWith(color: Colors.white70),
-                            ),
-                        ],
-                      ),
-                    ),
+                 
                 ],
               ),
             ),
@@ -367,7 +340,7 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
     return ClipRRect(
       borderRadius: BorderRadius.circular(12),
       child: Image.network(
-        memory['contentUrl'] ?? '',
+        memory['content'] ?? '',
         width: 150,
         height: 150,
         fit: BoxFit.cover,
@@ -380,42 +353,3 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
   }
 }
 
-class _CollaboratorAvatars extends StatelessWidget {
-  final List<String> collaborators;
-
-  const _CollaboratorAvatars({required this.collaborators, Key? key})
-      : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    final visibleCount = collaborators.length > 5 ? 5 : collaborators.length;
-
-    return SizedBox(
-      width: 30.0 * visibleCount,
-      height: 30,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: List.generate(visibleCount, (index) {
-          final nameOrInitial = collaborators[index];
-          return Positioned(
-            left: index * 22.0,
-            child: CircleAvatar(
-              radius: 15,
-              backgroundColor: Colors.white24,
-              child: Text(
-                nameOrInitial.isNotEmpty
-                    ? nameOrInitial[0].toUpperCase()
-                    : '?',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 14,
-                ),
-              ),
-            ),
-          );
-        }),
-      ),
-    );
-  }
-}
