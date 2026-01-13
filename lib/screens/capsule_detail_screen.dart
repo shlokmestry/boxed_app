@@ -146,7 +146,8 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
         _unlockDate = unlockDate;
         _capsuleTitle = (data['name'] ?? '').toString();
         _capsuleDescription = (data['description'] ?? '').toString();
-        _backgroundId = data['backgroundId'] is int ? data['backgroundId'] as int : null;
+        _backgroundId =
+            data['backgroundId'] is int ? data['backgroundId'] as int : null;
         _remaining = diff;
         _isUnlocked = unlocked;
         _loading = false;
@@ -377,7 +378,9 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
     final textTheme = Theme.of(context).textTheme;
 
     final String? backgroundAsset =
-        (_backgroundId != null && _backgroundId! >= 0 && _backgroundId! < _backgroundImages.length)
+        (_backgroundId != null &&
+                _backgroundId! >= 0 &&
+                _backgroundId! < _backgroundImages.length)
             ? _backgroundImages[_backgroundId!]
             : null;
 
@@ -419,7 +422,8 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
                     const SizedBox(height: 10),
                     Text(
                       _capsuleDescription!,
-                      style: textTheme.bodyMedium?.copyWith(color: Colors.white70),
+                      style:
+                          textTheme.bodyMedium?.copyWith(color: Colors.white70),
                       textAlign: TextAlign.center,
                     ),
                   ],
@@ -433,7 +437,6 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
                       ),
                     ),
                   const SizedBox(height: 18),
-
                   Align(
                     alignment: Alignment.centerLeft,
                     child: Text(
@@ -442,7 +445,6 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
                     ),
                   ),
                   const SizedBox(height: 10),
-
                   Expanded(
                     child: _textLoading
                         ? const Center(child: CircularProgressIndicator())
@@ -451,14 +453,16 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
                                 alignment: Alignment.topLeft,
                                 child: Text(
                                   'No notes yet.',
-                                  style: textTheme.bodyMedium?.copyWith(color: Colors.white70),
+                                  style: textTheme.bodyMedium
+                                      ?.copyWith(color: Colors.white70),
                                 ),
                               )
                             : ListView.builder(
                                 itemCount: _textMemories.length,
                                 itemBuilder: (context, i) {
                                   final m = _textMemories[i];
-                                  final text = (m['decryptedContent'] ?? '').toString();
+                                  final text =
+                                      (m['decryptedContent'] ?? '').toString();
 
                                   return Card(
                                     color: Colors.white.withOpacity(0.12),
@@ -467,7 +471,8 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
                                       padding: const EdgeInsets.all(12),
                                       child: Text(
                                         text,
-                                        style: textTheme.bodyMedium?.copyWith(color: Colors.white),
+                                        style: textTheme.bodyMedium
+                                            ?.copyWith(color: Colors.white),
                                       ),
                                     ),
                                   );
