@@ -1,66 +1,37 @@
-<<<<<<< HEAD
-=======
-import 'package:boxed_app/services/boxed_encryption_service.dart';
->>>>>>> fc5ef48 (removed upload images feature)
-import 'package:boxed_app/state/user_crypto_state.dart';
-import 'package:boxed_app/services/boxed_encryption_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-<<<<<<< HEAD
-import 'package:provider/provider.dart';
-import 'package:boxed_app/controllers/capsule_controller.dart';
-=======
->>>>>>> fc5ef48 (removed upload images feature)
+import 'package:intl/intl.dart';
+
+import 'package:boxed_app/services/boxed_encryption_service.dart';
+import 'package:boxed_app/state/user_crypto_state.dart';
 
 class CreateCapsuleScreen extends StatefulWidget {
   const CreateCapsuleScreen({super.key});
 
   @override
-  State<CreateCapsuleScreen> createState() => CreateCapsuleScreenState();
+  State<CreateCapsuleScreen> createState() => _CreateCapsuleScreenState();
 }
 
-class CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
-  final nameController = TextEditingController();
-  final descriptionController = TextEditingController();
-  final noteController = TextEditingController();
-  DateTime? selectedDateTime;
-  bool isLoading = false;
-  int? selectedBackground;
+class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
+  final _nameController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _noteController = TextEditingController();
 
-<<<<<<< HEAD
-  final List<String> backgroundOptions = [
+  DateTime? _selectedDateTime;
+  bool _isLoading = false;
+
+  int? _selectedBackgroundId;
+
+  final List<String> _backgroundOptions = const [
     'assets/basic/background1.jpg',
     'assets/basic/background2.webp',
     'assets/basic/background3.jpg',
   ];
 
-  Future<void> selectDate() async {
-=======
-  DateTime? _selectedDateTime;
-  bool _isLoading = false;
-
-  int? _selectedBackground;
-
-  final List<String> _backgroundOptions = [
-    'assets/basic_background1.jpg',
-    'assets/basic_background2.webp',
-    'assets/basic_background3.jpg',
-  ];
-
-  // ───────────── SAFE SESSION CHECK ─────────────
-  bool _hasUserMasterKey() {
-    try {
-      UserCryptoState.userMasterKey;
-      return true;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  Future<void> _selectDate() async {
->>>>>>> fc5ef48 (removed upload images feature)
+  Future<void> _selectDateTime() async {
     final now = DateTime.now();
+
     final pickedDate = await showDatePicker(
       context: context,
       initialDate: now.add(const Duration(days: 1)),
@@ -76,7 +47,7 @@ class CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     if (pickedTime == null) return;
 
     setState(() {
-      selectedDateTime = DateTime(
+      _selectedDateTime = DateTime(
         pickedDate.year,
         pickedDate.month,
         pickedDate.day,
@@ -86,79 +57,42 @@ class CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     });
   }
 
-<<<<<<< HEAD
-  Future<void> createCapsule() async {
-=======
   Future<void> _createCapsule() async {
->>>>>>> fc5ef48 (removed upload images feature)
     final user = FirebaseAuth.instance.currentUser;
 
-    if (user == null ||
-        nameController.text.trim().isEmpty ||
-        descriptionController.text.trim().isEmpty ||
-        selectedDateTime == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please complete all fields')),
-      );
+    if (user == null) {
+      _showSnack('Please sign in again.');
       return;
     }
 
-    setState(() => isLoading = true);
+    if (_nameController.text.trim().isEmpty ||
+        _descriptionController.text.trim().isEmpty ||
+        _selectedDateTime == null) {
+      _showSnack('Please complete all fields.');
+      return;
+    }
+
+    final userMasterKey = UserCryptoState.userMasterKeyOrNull;
+    if (userMasterKey == null) {
+      _showSnack('Master key missing. Please log in again.');
+      return;
+    }
+
+    setState(() => _isLoading = true);
 
     try {
       final firestore = FirebaseFirestore.instance;
 
-<<<<<<< HEAD
-      // ✅ Must have master key to encrypt capsule key for storage
-      final userMasterKey = UserCryptoState.userMasterKeyOrNull;
-      if (userMasterKey == null) {
-        throw Exception('Master key missing. Please log in again.');
-      }
-=======
-      // Master key (already initialized at login / app startup)
-      final userMasterKey = UserCryptoState.userMasterKey;
->>>>>>> fc5ef48 (removed upload images feature)
-
       // Generate capsule key (used to encrypt memories/notes)
       final capsuleKey = await BoxedEncryptionService.generateCapsuleKey();
 
-<<<<<<< HEAD
-      // ✅ Encrypt capsule key for this user (stored in Firestore)
-=======
       // Encrypt capsule key for this user (stored in Firestore)
->>>>>>> fc5ef48 (removed upload images feature)
       final encryptedCapsuleKey =
           await BoxedEncryptionService.encryptCapsuleKeyForUser(
         capsuleKey: capsuleKey,
         userMasterKey: userMasterKey,
       );
 
-<<<<<<< HEAD
-      // Solo capsule - always active, no collaborators
-      final capsuleRef = firestore.collection('capsules').doc();
-      final capsuleId = capsuleRef.id;
-
-      // Create capsule doc (SOLO schema)
-      await capsuleRef.set({
-        'capsuleId': capsuleId,
-        'name': nameController.text.trim(),
-        'description': descriptionController.text.trim(),
-        'creatorId': user.uid,
-        'unlockDate': Timestamp.fromDate(selectedDateTime!.toUtc()),
-        'capsuleKeys': {user.uid: encryptedCapsuleKey}, // ✅ encrypted SecretBox
-        'createdAt': FieldValue.serverTimestamp(),
-        'updatedAt': FieldValue.serverTimestamp(),
-        'emoji': '',
-        'backgroundId': selectedBackground,
-        'isSurprise': false,
-      });
-
-      // Encrypted note as memory (text-only)
-      if (noteController.text.trim().isNotEmpty) {
-        final encryptedNote = await BoxedEncryptionService.encryptData(
-          plainText: noteController.text.trim(),
-=======
-      // Create capsule doc (SOLO schema)
       final capsuleRef = firestore.collection('capsules').doc();
       final capsuleId = capsuleRef.id;
 
@@ -172,15 +106,15 @@ class CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
         'emoji': '🎁',
-        'backgroundId': _selectedBackground,
+        'backgroundId': _selectedBackgroundId,
         'isSurprise': false,
       });
 
-      // Encrypted note -> memory doc (optional)
-      if (_noteController.text.trim().isNotEmpty) {
+      // Optional: initial note stored as encrypted text memory
+      final note = _noteController.text.trim();
+      if (note.isNotEmpty) {
         final encryptedNote = await BoxedEncryptionService.encryptData(
-          plainText: _noteController.text.trim(),
->>>>>>> fc5ef48 (removed upload images feature)
+          plainText: note,
           capsuleKey: capsuleKey,
         );
 
@@ -193,29 +127,22 @@ class CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
         });
       }
 
-<<<<<<< HEAD
-      if (mounted) {
-        Navigator.of(context).pop();
-        context.read<CapsuleController>().loadCapsules(user.uid);
-      }
-=======
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Capsule created!')),
-      );
-
+      if (!mounted) return;
+      _showSnack('Capsule created!');
       Navigator.pop(context);
->>>>>>> fc5ef48 (removed upload images feature)
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
-      );
+      if (!mounted) return;
+      _showSnack('Error: $e');
     } finally {
-      if (mounted) setState(() => isLoading = false);
+      if (!mounted) return;
+      setState(() => _isLoading = false);
     }
   }
 
-<<<<<<< HEAD
-=======
+  void _showSnack(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
@@ -224,11 +151,10 @@ class CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     super.dispose();
   }
 
-  // ───────────── UI ─────────────
-
->>>>>>> fc5ef48 (removed upload images feature)
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Scaffold(
       appBar: AppBar(title: const Text('Create Capsule')),
       body: SingleChildScrollView(
@@ -236,24 +162,30 @@ class CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _input(nameController, 'Capsule name'),
-            _input(descriptionController, 'Description', maxLines: 3),
+            _input(_nameController, 'Capsule name'),
+            _input(_descriptionController, 'Description', maxLines: 3),
             const SizedBox(height: 12),
-            GestureDetector(onTap: selectDate, child: _dateTile()),
+            GestureDetector(onTap: _selectDateTime, child: _dateTile()),
             const SizedBox(height: 16),
-<<<<<<< HEAD
-            _input(noteController, 'Write a note (optional)', maxLines: 3),
-=======
-            _input(_noteController, 'Write a note', maxLines: 3),
->>>>>>> fc5ef48 (removed upload images feature)
+            Text(
+              'Background (optional)',
+              style: TextStyle(
+                color: colorScheme.onBackground.withOpacity(0.8),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 10),
+            _backgroundPicker(),
+            const SizedBox(height: 16),
+            _input(_noteController, 'Write a note (optional)', maxLines: 3),
             const SizedBox(height: 24),
-            if (isLoading)
+            if (_isLoading)
               const Center(child: CircularProgressIndicator())
             else
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: createCapsule,
+                  onPressed: _createCapsule,
                   child: const Text('Create Capsule'),
                 ),
               ),
@@ -282,36 +214,92 @@ class CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     );
   }
 
-<<<<<<< HEAD
   Widget _dateTile() {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    final label = _selectedDateTime == null
+        ? 'Pick unlock date'
+        : 'Unlocks on: ${DateFormat.yMMMd().add_jm().format(_selectedDateTime!.toLocal())}';
+
     return Container(
+      width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: colorScheme.surface,
         borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colorScheme.outline.withOpacity(0.35)),
       ),
-      child: Text(
-        selectedDateTime == null
-            ? 'Pick unlock date'
-            : 'Opens on ${selectedDateTime!.toLocal()}',
+      child: Row(
+        children: [
+          Icon(Icons.calendar_month, color: colorScheme.primary),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              label,
+              style: TextStyle(color: colorScheme.onSurface),
+            ),
+          ),
+        ],
       ),
     );
   }
-=======
-  Widget _input(TextEditingController c, String hint, {int maxLines = 1}) =>
-      Padding(
-        padding: const EdgeInsets.only(bottom: 12),
-        child: TextField(
-          controller: c,
-          maxLines: maxLines,
-          decoration: InputDecoration(
-            hintText: hint,
-            filled: true,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(12),
+
+  Widget _backgroundPicker() {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return SizedBox(
+      height: 88,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _backgroundOptions.length + 1, // + "None"
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (context, i) {
+          final bool isNone = i == 0;
+          final int? bgId = isNone ? null : i - 1;
+          final bool selected = _selectedBackgroundId == bgId;
+
+          return InkWell(
+            onTap: () => setState(() => _selectedBackgroundId = bgId),
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              width: 88,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: selected
+                      ? colorScheme.primary
+                      : colorScheme.outline.withOpacity(0.35),
+                  width: selected ? 2 : 1,
+                ),
+                color: colorScheme.surface,
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: isNone
+                  ? Center(
+                      child: Text(
+                        'None',
+                        style: TextStyle(
+                          color: colorScheme.onSurface.withOpacity(0.8),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    )
+                  : Image.asset(
+                      _backgroundOptions[bgId!],
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Center(
+                        child: Text(
+                          'Missing',
+                          style: TextStyle(
+                            color: colorScheme.onSurface.withOpacity(0.7),
+                          ),
+                        ),
+                      ),
+                    ),
             ),
-          ),
-        ),
-      );
->>>>>>> fc5ef48 (removed upload images feature)
+          );
+        },
+      ),
+    );
+  }
 }
