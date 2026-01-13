@@ -2,9 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
-
-import 'package:boxed_app/controllers/capsule_controller.dart';
 
 import 'package:boxed_app/services/boxed_encryption_service.dart';
 import 'package:boxed_app/state/user_crypto_state.dart';
@@ -48,9 +45,7 @@ class _HomeScreenState extends State<HomeScreen> {
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (_) => const CreateCapsuleScreen(),
-            ),
+            MaterialPageRoute(builder: (_) => const CreateCapsuleScreen()),
           );
         },
         backgroundColor: colorScheme.primary,
@@ -68,9 +63,8 @@ class _HomeScreenState extends State<HomeScreen> {
           : StreamBuilder<QuerySnapshot>(
               stream: FirebaseFirestore.instance
                   .collection('capsules')
-                  // ✅ SOLO MVP: capsules created by this user
+                  // Solo MVP: capsules created by this user
                   .where('creatorId', isEqualTo: user.uid)
-                  .orderBy('createdAt', descending: true)
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
@@ -92,7 +86,22 @@ class _HomeScreenState extends State<HomeScreen> {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                final docs = snapshot.data?.docs ?? [];
+                final docs = (snapshot.data?.docs ?? []).toList();
+
+                // Sort locally by createdAt desc (avoids composite index requirement)
+                docs.sort((a, b) {
+                  final aData = a.data() as Map<String, dynamic>?;
+                  final bData = b.data() as Map<String, dynamic>?;
+
+                  final aTs = aData?['createdAt'];
+                  final bTs = bData?['createdAt'];
+
+                  final aMillis = aTs is Timestamp ? aTs.millisecondsSinceEpoch : 0;
+                  final bMillis = bTs is Timestamp ? bTs.millisecondsSinceEpoch : 0;
+
+                  return bMillis.compareTo(aMillis);
+                });
+
                 if (docs.isEmpty) {
                   return Center(
                     child: Text(
@@ -115,7 +124,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     final emoji = (data['emoji'] ?? '📦').toString();
 
                     final ts = data['unlockDate'];
-                    final unlockDate = ts is Timestamp ? ts.toDate() : DateTime.now();
+                    final unlockDate =
+                        ts is Timestamp ? ts.toDate() : DateTime.now();
 
                     final isUnlocked = DateTime.now().isAfter(unlockDate);
 
@@ -142,94 +152,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  /// ───────────── CAPSULE LIST (Controller-driven) ─────────────
-  Widget _buildCapsulesBody(BuildContext context) {
-    final controller = context.watch<CapsuleController>();
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    switch (controller.state) {
-      case CapsuleLoadState.loading:
-        return const Center(
-          child: CircularProgressIndicator(),
-        );
-
-      case CapsuleLoadState.empty:
-        return Center(
-          child: Text(
-            "No capsules found.",
-            style: textTheme.bodyLarge?.copyWith(
-              color: colorScheme.onBackground.withOpacity(0.7),
-            ),
-          ),
-        );
-
-      case CapsuleLoadState.error:
-        return Center(
-          child: Text(
-            controller.error ?? "Something went wrong",
-            style: textTheme.bodyLarge?.copyWith(
-              color: Colors.redAccent,
-            ),
-          ),
-        );
-
-      case CapsuleLoadState.ready:
-      final capsules = controller.capsules;
-
-        if (capsules.isEmpty) {
-          return Center(
-            child: Text(
-              "No capsules found.",
-              style: textTheme.bodyLarge?.copyWith(
-                color: colorScheme.onBackground.withOpacity(0.7),
-              ),
-            ),
-          );
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: capsules.length,
-          itemBuilder: (context, index) {
-            final data = capsules[index];
-
-            final title = data['name'] ?? '';
-            final emoji = data['emoji'] ?? '📦';
-          final unlockDate = (data['unlockDate'] as Timestamp).toDate();
-            final isUnlocked =
-                DateTime.now().isAfter(unlockDate);
-            final isPending = false;
-
-            return CapsuleCard(
-              title: title,
-              emoji: emoji,
-              unlockDate: unlockDate,
-              isUnlocked: isUnlocked,
-              isPending: isPending,
-              onTap: isPending
-                  ? null
-                  : () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              CapsuleDetailScreen(
-                            capsuleId: data['capsuleId'],
-                          ),
-                        ),
-                      );
-                    },
-            );
-          },
-        );
-
-      default:
-        return const SizedBox.shrink();
-    }
-  }
-
-  /// ───────────── DRAWER ─────────────
   Drawer _buildDrawer(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
@@ -275,10 +197,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Navigator.pop(context);
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) =>
-                        const SettingsScreen(),
-                  ),
+                  MaterialPageRoute(builder: (_) => const SettingsScreen()),
                 );
               },
             ),
@@ -293,10 +212,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
                 final uid = FirebaseAuth.instance.currentUser?.uid;
 
-                // ✅ Clear persisted + in-memory crypto state first
+                // Clear persisted + in-memory crypto state
                 if (uid != null) {
                   await BoxedEncryptionService.clearUserMasterKey(uid);
-
                 }
                 UserCryptoState.clear();
 
@@ -306,17 +224,6 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 20),
           ],
         ),
-      ),
-    );
-  }
-
-  void _showSnack(BuildContext context, String message) {
-    final colorScheme = Theme.of(context).colorScheme;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: colorScheme.surface,
-        behavior: SnackBarBehavior.floating,
       ),
     );
   }
@@ -429,16 +336,11 @@ class _DrawerButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final baseIconColor =
-        iconColor ?? colorScheme.onSurface;
-    final baseTextColor =
-        textColor ?? colorScheme.onSurface;
+    final baseIconColor = iconColor ?? colorScheme.onSurface;
+    final baseTextColor = textColor ?? colorScheme.onSurface;
 
     return Padding(
-      padding: const EdgeInsets.symmetric(
-        horizontal: 16,
-        vertical: 8,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: GestureDetector(
         onTap: onTap,
         child: Container(
@@ -446,10 +348,7 @@ class _DrawerButton extends StatelessWidget {
             color: colorScheme.surface,
             borderRadius: BorderRadius.circular(12),
           ),
-          padding: const EdgeInsets.symmetric(
-            vertical: 14,
-            horizontal: 16,
-          ),
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
           child: Row(
             children: [
               Icon(icon, color: baseIconColor),

@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
-/// Explicit result model so UI can react correctly
+/// Explicit result model so UI can react correctly.
 class CapsuleCreateResult {
   final bool success;
   final String? capsuleId;
@@ -18,17 +18,19 @@ class CapsuleCreateResult {
 class CapsuleService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  static final CollectionReference _capsules =
+  static final CollectionReference<Map<String, dynamic>> _capsules =
       _firestore.collection('capsules');
 
   /// SOLO MVP:
-  /// This method is no longer used by the CreateCapsuleScreen (it writes directly),
-  /// but kept here in case you want a programmatic creator later.
+  /// CreateCapsuleScreen writes directly, but this is kept for future programmatic creation.
   static Future<CapsuleCreateResult> createEncryptedCapsule({
     required String creatorId,
     required String name,
     required String description,
     required DateTime unlockDate,
+    String emoji = '🔒',
+    int? backgroundId,
+    bool isSurprise = false,
   }) async {
     try {
       final capsuleDoc = _capsules.doc();
@@ -42,63 +44,39 @@ class CapsuleService {
         'unlockDate': Timestamp.fromDate(unlockDate.toUtc()),
         'createdAt': FieldValue.serverTimestamp(),
         'updatedAt': FieldValue.serverTimestamp(),
-        // solo fields
-        'emoji': '🔒',
-        'backgroundId': null,
-        'isSurprise': false,
+        'emoji': emoji,
+        'backgroundId': backgroundId,
+        'isSurprise': isSurprise,
       });
 
       return CapsuleCreateResult.success(capsuleId);
-    } catch (e, st) {
+    } catch (e) {
       // ignore: avoid_print
       print('Error creating capsule: $e');
-      // ignore: avoid_print
-      print(st);
       return CapsuleCreateResult.failure(e.toString());
     }
   }
 
-  /// Collaborator flows are unused in solo MVP; leave as no‑ops or remove later.
-  static Future<void> acceptInvite({
-    required String capsuleId,
-    required String userId,
-  }) async {
-    // no-op in solo MVP
-    return;
-  }
-
-  static Future<void> declineInvite({
-    required String capsuleId,
-    required String userId,
-  }) async {
-    // no-op in solo MVP
-    return;
-  }
-
-  static Future<void> autoUnlockExpiredCapsules(
+  /// SOLO MVP: fetch all capsules where this user is the creator.
+  static Future<List<Map<String, dynamic>>> fetchUserCapsules(
     String userId,
   ) async {
-    // Optional: if you later want a cron-like unlock update, implement here.
+    try {
+      final querySnapshot =
+          await _capsules.where('creatorId', isEqualTo: userId).get();
+
+      return querySnapshot.docs
+          .map((doc) => {'capsuleId': doc.id, ...doc.data()})
+          .toList();
+    } catch (e) {
+      // ignore: avoid_print
+      print('Error fetching user capsules: $e');
+      return [];
+    }
+  }
+
+  /// SOLO MVP: no server-side unlock mutation needed (UI checks unlockDate).
+  static Future<void> autoUnlockExpiredCapsules(String userId) async {
     return;
   }
-
-
-  /// SOLO MVP: fetch all capsules where this user is the creator.
-static Future<List<Map<String, dynamic>>> fetchUserCapsules(String userId) async {
-  try {
-    final querySnapshot = await _capsules
-        .where('creatorId', isEqualTo: userId)
-        // .orderBy('createdAt', descending: true)  // Index ready, uncomment later
-        .get();
-
-    return querySnapshot.docs
-        .map((doc) => {'capsuleId': doc.id, ...doc.data() as Map<String, dynamic>})
-        .toList();
-  } catch (e) {
-    print('Error fetching user capsules: $e');
-    return [];
-  }
-}
-
-
 }
