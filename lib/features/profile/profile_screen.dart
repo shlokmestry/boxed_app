@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:boxed_app/screens/edit_profile_screen.dart';
+import 'package:boxed_app/features/profile/edit_profile_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';

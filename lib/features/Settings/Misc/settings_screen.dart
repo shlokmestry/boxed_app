@@ -1,9 +1,9 @@
-import 'package:boxed_app/widgets/theme_picker_sheet.dart';
+import 'package:boxed_app/core/widgets/theme_picker_sheet.dart';
 import 'package:flutter/material.dart';
-import 'package:boxed_app/screens/edit_profile_screen.dart';
-import 'package:boxed_app/screens/delete_account_screen.dart';
-import 'package:boxed_app/screens/bug_report_screen.dart';  // Bug report screen
-import 'package:boxed_app/screens/faq_screen.dart';  // FAQ screen
+import 'package:boxed_app/features/profile/edit_profile_screen.dart';
+import 'package:boxed_app/features/profile/delete_account_screen.dart';
+import 'package:boxed_app/features/Settings/Misc/bug_report_screen.dart';  // Bug report screen
+import 'package:boxed_app/features/Settings/Misc/faq_screen.dart';  // FAQ screen
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});

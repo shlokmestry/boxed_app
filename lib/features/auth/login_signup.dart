@@ -1,14 +1,14 @@
 import 'dart:math';
 
-import 'package:boxed_app/widgets/buttons.dart';
-import 'package:boxed_app/screens/choose_username_screen.dart';
+import 'package:boxed_app/core/widgets/buttons.dart';
+import 'package:boxed_app/features/auth/choose_username_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 
-import 'home_screen.dart';
-import 'package:boxed_app/state/user_crypto_state.dart';
+import '../capsules/screens/home_screen.dart';
+import 'package:boxed_app/core/state/user_crypto_state.dart';
 
 class LoginSignup extends StatefulWidget {
   const LoginSignup({super.key});

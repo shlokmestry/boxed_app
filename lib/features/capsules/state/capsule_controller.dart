@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:boxed_app/services/capsule_service.dart';
+import 'package:boxed_app/features/capsules/data/capsule_service.dart';
 
 enum CapsuleLoadState {
   idle,
