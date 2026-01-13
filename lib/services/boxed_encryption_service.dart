@@ -15,8 +15,6 @@ class BoxedEncryptionService {
 
   static const _userMasterKeyPrefix = 'boxed_user_master_key_';
 
-
-
   /// Called at LOGIN / SIGNUP (password available)
   static Future<SecretKey> getOrCreateUserMasterKey({
     required String userId,
@@ -24,6 +22,7 @@ class BoxedEncryptionService {
   }) async {
     final userDoc =
         await FirebaseFirestore.instance.collection('users').doc(userId).get();
+
     final data = userDoc.data();
 
     if (data == null || data['encryptionSalt'] == null) {
@@ -37,12 +36,7 @@ class BoxedEncryptionService {
       nonce: utf8.encode('$userId:$salt'),
     );
 
-    // Persist key for app restarts
-    await persistUserMasterKey(
-      userId: userId,
-      userMasterKey: key,
-    );
-
+    await persistUserMasterKey(userId: userId, userMasterKey: key);
     return key;
   }
 
@@ -53,11 +47,7 @@ class BoxedEncryptionService {
   }) async {
     final prefs = await SharedPreferences.getInstance();
     final bytes = await userMasterKey.extractBytes();
-
-    await prefs.setString(
-      '$_userMasterKeyPrefix$userId',
-      base64Encode(bytes),
-    );
+    await prefs.setString('$_userMasterKeyPrefix$userId', base64Encode(bytes));
   }
 
   /// Load master key on app startup (NO password required)
@@ -65,7 +55,6 @@ class BoxedEncryptionService {
     final prefs = await SharedPreferences.getInstance();
     final encoded = prefs.getString('$_userMasterKeyPrefix$userId');
     if (encoded == null) return null;
-
     return SecretKey(base64Decode(encoded));
   }
 
@@ -74,7 +63,6 @@ class BoxedEncryptionService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('$_userMasterKeyPrefix$userId');
   }
-
 
   static Future<SecretKey> generateCapsuleKey() async {
     return _aesGcm.newSecretKey();
@@ -85,10 +73,7 @@ class BoxedEncryptionService {
     required SecretKey userMasterKey,
   }) async {
     final bytes = await capsuleKey.extractBytes();
-    final secretBox = await _aesGcm.encrypt(
-      bytes,
-      secretKey: userMasterKey,
-    );
+    final secretBox = await _aesGcm.encrypt(bytes, secretKey: userMasterKey);
     return _encodeSecretBox(secretBox);
   }
 
@@ -97,23 +82,16 @@ class BoxedEncryptionService {
     required SecretKey userMasterKey,
   }) async {
     final secretBox = _decodeSecretBox(encryptedCapsuleKey);
-    final clearBytes = await _aesGcm.decrypt(
-      secretBox,
-      secretKey: userMasterKey,
-    );
+    final clearBytes = await _aesGcm.decrypt(secretBox, secretKey: userMasterKey);
     return SecretKey(clearBytes);
   }
-
-
 
   static Future<String> encryptData({
     required String plainText,
     required SecretKey capsuleKey,
   }) async {
-    final secretBox = await _aesGcm.encrypt(
-      utf8.encode(plainText),
-      secretKey: capsuleKey,
-    );
+    final secretBox =
+        await _aesGcm.encrypt(utf8.encode(plainText), secretKey: capsuleKey);
     return _encodeSecretBox(secretBox);
   }
 
@@ -122,17 +100,13 @@ class BoxedEncryptionService {
     required SecretKey capsuleKey,
   }) async {
     final secretBox = _decodeSecretBox(encryptedText);
-    final clearBytes = await _aesGcm.decrypt(
-      secretBox,
-      secretKey: capsuleKey,
-    );
+    final clearBytes = await _aesGcm.decrypt(secretBox, secretKey: capsuleKey);
     return utf8.decode(clearBytes);
   }
 
- 
   /// Encodes nonce + ciphertext + mac into one base64 string
   static String _encodeSecretBox(SecretBox box) {
-    final map = <String, String>{
+    final map = {
       'nonce': base64Encode(box.nonce),
       'cipherText': base64Encode(box.cipherText),
       'mac': base64Encode(box.mac.bytes),
@@ -144,7 +118,6 @@ class BoxedEncryptionService {
   static SecretBox _decodeSecretBox(String encoded) {
     final decoded =
         jsonDecode(utf8.decode(base64Decode(encoded))) as Map<String, dynamic>;
-
     return SecretBox(
       base64Decode(decoded['cipherText'] as String),
       nonce: base64Decode(decoded['nonce'] as String),

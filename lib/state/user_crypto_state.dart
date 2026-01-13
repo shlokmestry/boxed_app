@@ -4,11 +4,19 @@ import 'package:boxed_app/services/boxed_encryption_service.dart';
 class UserCryptoState {
   static SecretKey? _userMasterKey;
 
-  /// ✅ Nullable accessor (does NOT throw)
+  /// Nullable accessor (does NOT throw)
   static SecretKey? get userMasterKeyOrNull => _userMasterKey;
 
-  /// 🔐 LOGIN / SIGNUP ONLY
-  /// Called when user enters password
+  /// Strict accessor used where key MUST exist
+  static SecretKey get userMasterKey {
+    final key = _userMasterKey;
+    if (key == null) {
+      throw Exception('User master key not initialized');
+    }
+    return key;
+  }
+
+  /// LOGIN / SIGNUP ONLY (password available)
   static Future<void> initializeForUser({
     required String userId,
     required String password,
@@ -19,8 +27,7 @@ class UserCryptoState {
     );
   }
 
-  /// 🔐 APP STARTUP ONLY
-  /// Loads previously derived key (NO password required)
+  /// APP STARTUP ONLY (loads persisted key; no password required)
   static Future<void> initialize(String userId) async {
     if (_userMasterKey != null) return;
 
@@ -32,15 +39,7 @@ class UserCryptoState {
     _userMasterKey = storedKey;
   }
 
-  /// 🔐 Strict accessor used where key MUST exist
-  static SecretKey get userMasterKey {
-    if (_userMasterKey == null) {
-      throw Exception('User master key not initialized');
-    }
-    return _userMasterKey!;
-  }
-
-  /// 🚪 Clear on logout
+  /// Clear on logout
   static void clear() {
     _userMasterKey = null;
   }

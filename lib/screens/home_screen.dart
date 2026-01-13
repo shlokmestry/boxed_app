@@ -6,16 +6,13 @@ import 'package:provider/provider.dart';
 
 import 'package:boxed_app/controllers/capsule_controller.dart';
 
+import 'package:boxed_app/services/boxed_encryption_service.dart';
+import 'package:boxed_app/state/user_crypto_state.dart';
+
 import 'capsule_detail_screen.dart';
 import 'create_capsule_screen.dart';
 import 'profile_screen.dart';
 import 'settings_screen.dart';
-
-import 'package:boxed_app/state/user_crypto_state.dart';
-import 'package:boxed_app/services/boxed_encryption_service.dart';
-
-
-
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -63,11 +60,85 @@ class _HomeScreenState extends State<HomeScreen> {
           ? Center(
               child: Text(
                 "Please sign in to view capsules",
-                style: textTheme.bodyLarge
-                    ?.copyWith(color: colorScheme.onBackground),
+                style: textTheme.bodyLarge?.copyWith(
+                  color: colorScheme.onBackground,
+                ),
               ),
             )
-          : _buildCapsulesBody(context),
+          : StreamBuilder<QuerySnapshot>(
+              stream: FirebaseFirestore.instance
+                  .collection('capsules')
+                  // ✅ SOLO MVP: capsules created by this user
+                  .where('creatorId', isEqualTo: user.uid)
+                  .orderBy('createdAt', descending: true)
+                  .snapshots(),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(
+                        "Failed to load capsules.\n${snapshot.error}",
+                        textAlign: TextAlign.center,
+                        style: textTheme.bodyLarge?.copyWith(
+                          color: Colors.redAccent,
+                        ),
+                      ),
+                    ),
+                  );
+                }
+
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+
+                final docs = snapshot.data?.docs ?? [];
+                if (docs.isEmpty) {
+                  return Center(
+                    child: Text(
+                      "No capsules found.",
+                      style: textTheme.bodyLarge?.copyWith(
+                        color: colorScheme.onBackground.withOpacity(0.7),
+                      ),
+                    ),
+                  );
+                }
+
+                return ListView.builder(
+                  itemCount: docs.length,
+                  padding: const EdgeInsets.all(16),
+                  itemBuilder: (context, index) {
+                    final doc = docs[index];
+                    final data = doc.data() as Map<String, dynamic>;
+
+                    final title = (data['name'] ?? '').toString();
+                    final emoji = (data['emoji'] ?? '📦').toString();
+
+                    final ts = data['unlockDate'];
+                    final unlockDate = ts is Timestamp ? ts.toDate() : DateTime.now();
+
+                    final isUnlocked = DateTime.now().isAfter(unlockDate);
+
+                    return CapsuleCard(
+                      title: title,
+                      emoji: emoji,
+                      unlockDate: unlockDate,
+                      isUnlocked: isUnlocked,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => CapsuleDetailScreen(
+                              capsuleId: doc.id,
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                );
+              },
+            ),
     );
   }
 
@@ -193,22 +264,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Navigator.pop(context);
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => const ProfileScreen(),
-                  ),
-                );
-              },
-            ),
-         
-            
-            _DrawerButton(
-              icon: Icons.color_lens_outlined,
-              label: 'Themes',
-              onTap: () {
-                Navigator.pop(context);
-                _showSnack(
-                  context,
-                  "Themes feature coming soon",
+                  MaterialPageRoute(builder: (_) => const ProfileScreen()),
                 );
               },
             ),
@@ -228,28 +284,25 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const Spacer(),
             _DrawerButton(
-  icon: Icons.logout,
-  label: 'Sign Out',
-  iconColor: Colors.redAccent,
-  textColor: Colors.redAccent,
-  onTap: () async {
-    Navigator.pop(context);
+              icon: Icons.logout,
+              label: 'Sign Out',
+              iconColor: Colors.redAccent,
+              textColor: Colors.redAccent,
+              onTap: () async {
+                Navigator.pop(context);
 
-    // 1) Grab uid BEFORE signing out
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+                final uid = FirebaseAuth.instance.currentUser?.uid;
 
-    // 2) Clear persisted + in-memory crypto state
-    if (uid != null) {
-      await BoxedEncryptionService.clearUserMasterKey(uid);
-    }
-    UserCryptoState.clear();
+                // ✅ Clear persisted + in-memory crypto state first
+                if (uid != null) {
+                  await BoxedEncryptionService.clearUserMasterKey(uid);
 
-    // 3) Sign out + clear local UI state
-    await FirebaseAuth.instance.signOut();
-    context.read<CapsuleController>().clear();
-  },
-),
+                }
+                UserCryptoState.clear();
 
+                await FirebaseAuth.instance.signOut();
+              },
+            ),
             const SizedBox(height: 20),
           ],
         ),
@@ -275,7 +328,6 @@ class CapsuleCard extends StatelessWidget {
   final String emoji;
   final DateTime unlockDate;
   final bool isUnlocked;
-  final bool isPending;
   final VoidCallback? onTap;
 
   const CapsuleCard({
@@ -283,7 +335,6 @@ class CapsuleCard extends StatelessWidget {
     required this.emoji,
     required this.unlockDate,
     required this.isUnlocked,
-    this.isPending = false,
     this.onTap,
     super.key,
   });
@@ -297,72 +348,47 @@ class CapsuleCard extends StatelessWidget {
         ? 'Unlocked on ${DateFormat.yMMMd().format(unlockDate)}'
         : 'Unlocks in ${_formatCountdown(unlockDate)}';
 
-    return Opacity(
-      opacity: isPending ? 0.6 : 1.0,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Card(
-          color: colorScheme.surface,
-          margin: const EdgeInsets.only(bottom: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 16,
-              vertical: 14,
-            ),
-            child: Row(
-              mainAxisAlignment:
-                  MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '$emoji $title',
-                        style: textTheme.bodyLarge?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 17,
-                        ),
+    return GestureDetector(
+      onTap: onTap,
+      child: Card(
+        color: colorScheme.surface,
+        margin: const EdgeInsets.only(bottom: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '$emoji $title',
+                      style: textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w600,
+                        color: colorScheme.onSurface,
+                        fontSize: 17,
                       ),
-                      const SizedBox(height: 6),
-                      Text(
-                        unlockLabel,
-                        style: textTheme.bodySmall?.copyWith(
-                          color: colorScheme.onSurface
-                              .withOpacity(0.6),
-                          fontSize: 13,
-                        ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      unlockLabel,
+                      style: textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurface.withOpacity(0.6),
+                        fontSize: 13,
                       ),
-                      if (isPending) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          'Pending collaborators acceptance',
-                          style: textTheme.bodySmall?.copyWith(
-                            color:
-                                Colors.orange.shade700,
-                            fontWeight: FontWeight.w600,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
-                Icon(
-                  isUnlocked
-                      ? Icons.lock_open_rounded
-                      : Icons.lock_outline,
-                  color: isUnlocked
-                      ? Colors.greenAccent
-                      : colorScheme.onSurface
-                          .withOpacity(0.6),
-                ),
-              ],
-            ),
+              ),
+              Icon(
+                isUnlocked ? Icons.lock_open_rounded : Icons.lock_outline,
+                color: isUnlocked
+                    ? Colors.greenAccent
+                    : colorScheme.onSurface.withOpacity(0.6),
+              ),
+            ],
           ),
         ),
       ),
