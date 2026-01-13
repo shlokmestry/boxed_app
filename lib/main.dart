@@ -1,10 +1,10 @@
 import 'package:boxed_app/providers/theme_provider.dart';
-import 'package:boxed_app/screens/home_screen.dart';
-import 'package:boxed_app/screens/splash_screen.dart';
-import 'package:boxed_app/screens/choose_username_screen.dart';
-import 'package:boxed_app/screens/login_signup.dart';
-import 'package:boxed_app/controllers/capsule_controller.dart';
-import 'package:boxed_app/state/user_crypto_state.dart'; // ✅ ENABLED
+import 'package:boxed_app/features/capsules/screens/home_screen.dart';
+import 'package:boxed_app/features/Settings/Misc/splash_screen.dart';
+import 'package:boxed_app/features/auth/choose_username_screen.dart';
+import 'package:boxed_app/features/auth/login_signup.dart';
+import 'package:boxed_app/features/capsules/state/capsule_controller.dart';
+import 'package:boxed_app/core/state/user_crypto_state.dart'; // ✅ ENABLED
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';

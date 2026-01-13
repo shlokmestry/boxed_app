@@ -2,7 +2,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
-import 'package:boxed_app/services/boxed_encryption_service.dart';
+import 'package:boxed_app/core/services/boxed_encryption_service.dart';
 
 class EncryptionService {
   static final AesGcm _aesGcm = AesGcm.with256bits();

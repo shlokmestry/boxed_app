@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:cryptography/cryptography.dart';
-import 'package:boxed_app/services/boxed_encryption_service.dart';
+import 'package:boxed_app/core/services/boxed_encryption_service.dart';
 
 class CapsuleEncryption {
   /// Generate a new AES-256 key (base64)
