@@ -24,6 +24,7 @@ class BoxedEncryptionService {
         await FirebaseFirestore.instance.collection('users').doc(userId).get();
 
     final data = userDoc.data();
+
     if (data == null || data['encryptionSalt'] == null) {
       throw Exception('Encryption salt missing for user');
     }
@@ -110,6 +111,7 @@ class BoxedEncryptionService {
       'cipherText': base64Encode(box.cipherText),
       'mac': base64Encode(box.mac.bytes),
     };
+
     return base64Encode(utf8.encode(jsonEncode(map)));
   }
 
