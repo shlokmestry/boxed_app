@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cryptography/cryptography.dart';
@@ -50,6 +51,31 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
     _fetchCapsuleDetails();
   }
 
+  bool _isProbablyBase64(String s) {
+    final v = s.trim();
+    if (v.isEmpty) return false;
+    if (v.length < 16) return false;
+    // Most base64 strings are multiple of 4, but not always (padding can be omitted)
+    if (!RegExp(r'^[A-Za-z0-9+/=]+$').hasMatch(v)) return false;
+    return true;
+  }
+
+  bool _looksLikeEncryptedSecretBox(String s) {
+    // BoxedEncryptionService._encodeSecretBox returns base64(json)
+    // So "encryptedCapsuleKey" should be base64, and when decoded it should be JSON with keys.
+    if (!_isProbablyBase64(s)) return false;
+    try {
+      final decoded = utf8.decode(base64Decode(s.trim()));
+      final obj = jsonDecode(decoded);
+      return obj is Map &&
+          obj.containsKey('nonce') &&
+          obj.containsKey('cipherText') &&
+          obj.containsKey('mac');
+    } catch (_) {
+      return false;
+    }
+  }
+
   Future<void> _fetchCapsuleDetails() async {
     if (!mounted) return;
     setState(() {
@@ -95,8 +121,8 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
         return;
       }
 
-      final encryptedCapsuleKey = capsuleKeys[currentUser.uid];
-      if (encryptedCapsuleKey is! String || encryptedCapsuleKey.isEmpty) {
+      final storedKeyValue = capsuleKeys[currentUser.uid];
+      if (storedKeyValue is! String || storedKeyValue.trim().isEmpty) {
         if (!mounted) return;
         setState(() {
           _loading = false;
@@ -105,21 +131,39 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
         return;
       }
 
-      // 2) Decrypt capsule key using persisted master key
-      final userMasterKey = UserCryptoState.userMasterKeyOrNull;
-      if (userMasterKey == null) {
-        if (!mounted) return;
-        setState(() {
-          _loading = false;
-          _error = 'Master key missing. Please log in again.';
-        });
-        return;
-      }
+      final encryptedCapsuleKey = storedKeyValue.trim();
 
-      final capsuleKey = await BoxedEncryptionService.decryptCapsuleKeyForUser(
-        encryptedCapsuleKey: encryptedCapsuleKey,
-        userMasterKey: userMasterKey,
-      );
+      // 2) Decrypt capsule key using persisted master key (new format),
+      //    fall back to legacy raw base64 bytes if needed.
+      final userMasterKey = UserCryptoState.userMasterKeyOrNull;
+
+      SecretKey capsuleKey;
+
+      if (userMasterKey != null) {
+        try {
+          // New format (preferred): encrypted SecretBox string
+          capsuleKey = await BoxedEncryptionService.decryptCapsuleKeyForUser(
+            encryptedCapsuleKey: encryptedCapsuleKey,
+            userMasterKey: userMasterKey,
+          );
+        } catch (_) {
+          // Legacy fallback: raw base64 key bytes
+          if (!_isProbablyBase64(encryptedCapsuleKey) ||
+              _looksLikeEncryptedSecretBox(encryptedCapsuleKey)) {
+            throw Exception(
+              'Capsule key format invalid. This capsule may be from an old build. Try recreating it.',
+            );
+          }
+          capsuleKey = SecretKey(base64Decode(encryptedCapsuleKey));
+        }
+      } else {
+        // Without master key, only legacy raw base64 key bytes could work
+        if (!_isProbablyBase64(encryptedCapsuleKey) ||
+            _looksLikeEncryptedSecretBox(encryptedCapsuleKey)) {
+          throw Exception('Master key missing. Please log in again.');
+        }
+        capsuleKey = SecretKey(base64Decode(encryptedCapsuleKey));
+      }
 
       CapsuleCryptoState.setCapsuleKey(widget.capsuleId, capsuleKey);
 
@@ -170,7 +214,6 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
         if (!mounted) return;
 
         if (unlockedNow && !_isUnlocked) {
-          // Just flipped to unlocked
           setState(() {
             _isUnlocked = true;
             _remaining = Duration.zero;
@@ -182,7 +225,6 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
             _remaining = newDiff;
           });
         } else {
-          // already unlocked
           setState(() => _remaining = Duration.zero);
         }
       });
@@ -341,7 +383,7 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
               if (_unlockDate != null)
                 Text(
                   'Unlocks on: ${DateFormat.yMMMd().add_jm().format(_unlockDate!)}',
-                  style: TextStyle(
+                  style: textTheme.bodyMedium?.copyWith(
                     color: colorScheme.onBackground.withOpacity(0.6),
                   ),
                   textAlign: TextAlign.center,
@@ -349,13 +391,16 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
               const SizedBox(height: 18),
               Text(
                 '⏳ ${_formatDuration(_remaining)}',
-                style: TextStyle(color: colorScheme.primary, fontSize: 18),
+                style: textTheme.titleMedium?.copyWith(
+                  color: colorScheme.primary,
+                ),
               ),
               const SizedBox(height: 36),
               ElevatedButton(
                 onPressed: () => Navigator.pop(context),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: colorScheme.primary,
+                  foregroundColor: colorScheme.onPrimary,
                   padding: const EdgeInsets.symmetric(
                     vertical: 16,
                     horizontal: 32,
@@ -364,7 +409,7 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
                     borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-                child: const Text("Back", style: TextStyle(fontSize: 16)),
+                child: const Text("Back"),
               ),
             ],
           ),
@@ -408,7 +453,7 @@ class _CapsuleDetailScreenState extends State<CapsuleDetailScreen> {
                     centerTitle: true,
                     title: Text(
                       _capsuleTitle ?? 'Capsule',
-                      style: textTheme.headlineSmall?.copyWith(
+                      style: textTheme.titleLarge?.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
                       ),
