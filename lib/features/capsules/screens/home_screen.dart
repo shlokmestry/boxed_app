@@ -57,7 +57,6 @@ class _HomeScreenState extends State<HomeScreen> {
       length: 2,
       child: Scaffold(
         backgroundColor: colorScheme.background,
-        drawer: _buildDrawer(context),
         appBar: AppBar(
           title: const Text('My Capsules'),
           centerTitle: true,
@@ -230,103 +229,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Drawer _buildDrawer(BuildContext context) {
-    final user = FirebaseAuth.instance.currentUser;
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    final displayName = (user?.displayName ?? '').trim();
-    final email = (user?.email ?? '').trim();
-    final initials = (displayName.isNotEmpty)
-        ? displayName.characters.first.toUpperCase()
-        : (email.isNotEmpty ? email.characters.first.toUpperCase() : 'B');
-
-    return Drawer(
-      backgroundColor: colorScheme.background,
-      child: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 22,
-                    backgroundColor: colorScheme.primary.withOpacity(0.12),
-                    child: Text(
-                      initials,
-                      style: TextStyle(
-                        color: colorScheme.primary,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Boxed',
-                          style: textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.w800,
-                            color: colorScheme.onBackground,
-                          ),
-                        ),
-                        if (email.isNotEmpty)
-                          Text(
-                            email,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: textTheme.bodySmall?.copyWith(
-                              color: colorScheme.onBackground.withOpacity(0.65),
-                            ),
-                          ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              _DrawerItem(
-                icon: Icons.settings_rounded,
-                label: 'Settings',
-                onTap: () {
-                  Navigator.pop(context);
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                  );
-                },
-              ),
-              const Spacer(),
-              _DrawerItem(
-                icon: Icons.logout_rounded,
-                label: 'Sign Out',
-                destructive: true,
-                onTap: () async {
-                  Navigator.pop(context);
-
-                  final uid = FirebaseAuth.instance.currentUser?.uid;
-                  if (uid != null) {
-                    await BoxedEncryptionService.clearUserMasterKey(uid);
-                  }
-                  UserCryptoState.clear();
-                  await FirebaseAuth.instance.signOut();
-
-                  if (context.mounted) {
-                    context.read<CapsuleController>().clear();
-                  }
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
+ 
   }
-}
+
 
 class _CapsulesList extends StatelessWidget {
   final String userId;
@@ -625,6 +530,7 @@ class _ProfileAvatarButton extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _DrawerItem extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -635,6 +541,7 @@ class _DrawerItem extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onTap,
+    // ignore: unused_element_parameter
     this.destructive = false,
   });
 

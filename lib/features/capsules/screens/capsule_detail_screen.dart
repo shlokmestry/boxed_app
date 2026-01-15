@@ -6,9 +6,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import 'package:boxed_app/services/boxed_encryption_service.dart';
-import 'package:boxed_app/state/capsule_crypto_state.dart';
-import 'package:boxed_app/state/user_crypto_state.dart';
+import 'package:boxed_app/core/services/boxed_encryption_service.dart';
+import 'package:boxed_app/core/state/capsule_crypto_state.dart';
+import 'package:boxed_app/core/state/user_crypto_state.dart';
 
 class CapsuleDetailScreen extends StatefulWidget {
   final String capsuleId;

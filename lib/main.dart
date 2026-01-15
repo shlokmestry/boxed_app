@@ -4,7 +4,9 @@ import 'package:boxed_app/features/Settings/Misc/splash_screen.dart';
 import 'package:boxed_app/features/auth/choose_username_screen.dart';
 import 'package:boxed_app/features/auth/login_signup.dart';
 import 'package:boxed_app/features/capsules/state/capsule_controller.dart';
-import 'package:boxed_app/core/state/user_crypto_state.dart'; // ✅ ENABLED
+import 'package:boxed_app/core/state/user_crypto_state.dart';
+import 'package:boxed_app/core/theme/app_theme.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -97,32 +99,14 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Boxed',
+
+      // Theme mode selection is still controlled by ThemeProvider
       themeMode: themeProvider.themeMode,
-      theme: ThemeData(
-        scaffoldBackgroundColor: Colors.white,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.white,
-          foregroundColor: Colors.black,
-        ),
-        colorScheme: const ColorScheme.light(
-          primary: Colors.black,
-          onPrimary: Colors.white,
-          surface: Color(0xFFF4F4F4),
-        ),
-      ),
-      darkTheme: ThemeData(
-        brightness: Brightness.dark,
-        scaffoldBackgroundColor: Colors.black,
-        appBarTheme: const AppBarTheme(
-          backgroundColor: Colors.black,
-          foregroundColor: Colors.white,
-        ),
-        colorScheme: const ColorScheme.dark(
-          primary: Colors.white,
-          onPrimary: Colors.black,
-          surface: Color(0xFF222222),
-        ),
-      ),
+
+      // ✅ Single source of truth for fonts/colors/sizes
+      theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
+
       home: FutureBuilder<bool>(
         future: _getOnboardingSeen(),
         builder: (context, onboardingSnapshot) {
