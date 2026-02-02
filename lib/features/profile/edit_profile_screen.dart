@@ -16,7 +16,7 @@ class EditProfileScreen extends StatefulWidget {
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   final _picker = ImagePicker();
-  
+
   // Controllers for text fields
   final _fullNameController = TextEditingController();
   final _emailController = TextEditingController();
@@ -47,17 +47,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
 
-    final doc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .get();
+    final doc =
+        await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
     final data = doc.data();
 
     setState(() {
       final firstName = data?['firstName'] ?? '';
       final lastName = data?['lastName'] ?? '';
       final fullName = '$firstName $lastName'.trim();
-      
+
       _fullNameController.text = fullName;
       _emailController.text = user.email ?? '';
       _usernameController.text = data?['username'] ?? '';
@@ -81,6 +79,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           .ref()
           .child('profile_images')
           .child('$uid-${DateTime.now().millisecondsSinceEpoch}.jpg');
+
       setState(() => _isUploadingImage = true);
       final uploadTask = await ref.putFile(file);
       final downloadUrl = await uploadTask.ref.getDownloadURL();
@@ -88,6 +87,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       return downloadUrl;
     } catch (e) {
       setState(() => _isUploadingImage = false);
+      // ignore: avoid_print
       print('Image upload failed: $e');
       return null;
     }
@@ -103,7 +103,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
-    
+
     final uid = user.uid;
     String? imageUrl = _photoUrl;
 
@@ -118,7 +118,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       final firstName = nameParts.isNotEmpty ? nameParts[0] : '';
       final lastName =
           nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
-      
+
       final newEmail = _emailController.text.trim();
       final newUsername = _usernameController.text.trim();
 
@@ -137,8 +137,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           if (!mounted) return;
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Verification email sent. Please verify to complete email change.'),
-              backgroundColor: Color(0xFF1F2937),
+              content: Text(
+                'Verification email sent. Please verify to complete email change.',
+              ),
+              backgroundColor: Color(0xFF2A2A2A),
             ),
           );
         } catch (e) {
@@ -159,6 +161,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       Navigator.pop(context, true);
     } catch (e) {
       setState(() => _error = "Failed to save profile");
+      // ignore: avoid_print
       print("Error saving profile: $e");
     } finally {
       if (mounted) setState(() => _isLoading = false);
@@ -180,10 +183,18 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    const bg = Colors.black;
+    const surface = Color(0xFF1F2937); // consistent dark surface
+    const labelColor = Color(0xFF9CA3AF);
+    const hintColor = Color(0xFF6B7280);
+    const borderColor = Color(0xFF374151);
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: bg,
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: bg,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -201,9 +212,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
       ),
       body: _isLoading
           ? const Center(
-              child: CircularProgressIndicator(
-                color: Color(0xFFB794F6),
-              ),
+              child: CircularProgressIndicator(color: Colors.white),
             )
           : SingleChildScrollView(
               child: Padding(
@@ -213,6 +222,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                   child: Column(
                     children: [
                       const SizedBox(height: 24),
+
                       // Profile avatar
                       Center(
                         child: Stack(
@@ -225,18 +235,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 height: 100,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  gradient: (_newImage == null &&
-                                          (_photoUrl == null ||
-                                              _photoUrl!.isEmpty))
-                                      ? const LinearGradient(
-                                          colors: [
-                                            Color(0xFFEC4899),
-                                            Color(0xFF8B5CF6)
-                                          ],
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                        )
-                                      : null,
+                                  color: surface, // consistent avatar bg
                                   image: _newImage != null
                                       ? DecorationImage(
                                           image: FileImage(_newImage!),
@@ -249,6 +248,10 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                               fit: BoxFit.cover,
                                             )
                                           : null,
+                                  border: Border.all(
+                                    color: Colors.white.withOpacity(0.18),
+                                    width: 1,
+                                  ),
                                 ),
                                 child: (_newImage == null &&
                                         (_photoUrl == null ||
@@ -272,7 +275,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 height: 100,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 3,
-                                  color: Color(0xFFB794F6),
+                                  color: Colors.white,
                                 ),
                               ),
                             Positioned(
@@ -302,19 +305,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           ],
                         ),
                       ),
+
                       const SizedBox(height: 16),
+
                       GestureDetector(
                         onTap: _pickImage,
-                        child: const Text(
+                        child: Text(
                           'Change Profile Photo',
                           style: TextStyle(
-                            color: Color(0xFF3B82F6),
+                            color: colorScheme.primary, // primary color
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
                       ),
+
                       const SizedBox(height: 32),
+
                       if (_error != null) ...[
                         Text(
                           _error!,
@@ -322,7 +329,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                         ),
                         const SizedBox(height: 16),
                       ],
-                      // Full Name field
+
                       _buildInputField(
                         label: 'Full Name',
                         controller: _fullNameController,
@@ -331,9 +338,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             value == null || value.trim().isEmpty
                                 ? 'Required'
                                 : null,
+                        fillColor: surface,
+                        labelColor: labelColor,
+                        hintColor: hintColor,
+                        borderColor: borderColor,
+                        focusColor: colorScheme.primary,
                       ),
+
                       const SizedBox(height: 16),
-                      // Email field
+
                       _buildInputField(
                         label: 'Email',
                         controller: _emailController,
@@ -348,9 +361,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                           }
                           return null;
                         },
+                        fillColor: surface,
+                        labelColor: labelColor,
+                        hintColor: hintColor,
+                        borderColor: borderColor,
+                        focusColor: colorScheme.primary,
                       ),
+
                       const SizedBox(height: 16),
-                      // Username field
+
                       _buildInputField(
                         label: 'Username',
                         controller: _usernameController,
@@ -359,30 +378,58 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             value == null || value.trim().isEmpty
                                 ? 'Required'
                                 : null,
+                        fillColor: surface,
+                        labelColor: labelColor,
+                        hintColor: hintColor,
+                        borderColor: borderColor,
+                        focusColor: colorScheme.primary,
                       ),
+
                       const SizedBox(height: 40),
-                      // Update Profile button
+
+                      // Update Profile button (outlined; fixed disabled border issue)
                       SizedBox(
                         width: double.infinity,
                         height: 52,
-                        child: ElevatedButton(
-                          onPressed: _isUploadingImage ? null : _saveProfile,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.white,
-                            foregroundColor: Colors.black,
-                            elevation: 0,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                        child: OutlinedButton(
+                          onPressed:
+                              (_isUploadingImage || _isLoading) ? null : _saveProfile,
+                          style: ButtonStyle(
+                            shape: MaterialStateProperty.all(
+                              RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
                             ),
-                            disabledBackgroundColor:
-                                Colors.white.withOpacity(0.5),
+                            foregroundColor:
+                                MaterialStateProperty.resolveWith<Color>(
+                              (states) {
+                                if (states.contains(MaterialState.disabled)) {
+                                  return Colors.white.withOpacity(0.5);
+                                }
+                                return Colors.white;
+                              },
+                            ),
+                            side:
+                                MaterialStateProperty.resolveWith<BorderSide>(
+                              (states) {
+                                if (states.contains(MaterialState.disabled)) {
+                                  return BorderSide(
+                                    color: Colors.white.withOpacity(0.25),
+                                    width: 1.5,
+                                  );
+                                }
+                                return const BorderSide(
+                                  color: Colors.white,
+                                  width: 1.5,
+                                );
+                              },
+                            ),
                           ),
-                          child: const Text(
-                            'Update Profile',
-                            style: TextStyle(
+                          child: Text(
+                            _isLoading ? 'Saving...' : 'Update Profile',
+                            style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w600,
-                              color: Colors.black,
                             ),
                           ),
                         ),
@@ -401,14 +448,19 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     required String hintText,
     TextInputType? keyboardType,
     String? Function(String?)? validator,
+    required Color fillColor,
+    required Color labelColor,
+    required Color hintColor,
+    required Color borderColor,
+    required Color focusColor,
   }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
           label,
-          style: const TextStyle(
-            color: Color(0xFF9CA3AF),
+          style: TextStyle(
+            color: labelColor,
             fontSize: 13,
             fontWeight: FontWeight.w500,
           ),
@@ -423,46 +475,31 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
           ),
           decoration: InputDecoration(
             filled: true,
-            fillColor: const Color(0xFF1F2937),
+            fillColor: fillColor,
             hintText: hintText,
-            hintStyle: const TextStyle(
-              color: Color(0xFF6B7280),
+            hintStyle: TextStyle(
+              color: hintColor,
               fontSize: 15,
             ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: Color(0xFF374151),
-                width: 1,
-              ),
+              borderSide: BorderSide(color: borderColor, width: 1),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: Color(0xFF374151),
-                width: 1,
-              ),
+              borderSide: BorderSide(color: borderColor, width: 1),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: Color(0xFF3B82F6),
-                width: 2,
-              ),
+              borderSide: BorderSide(color: focusColor, width: 2),
             ),
             errorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: Colors.red,
-                width: 1,
-              ),
+              borderSide: const BorderSide(color: Colors.red, width: 1),
             ),
             focusedErrorBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(
-                color: Colors.red,
-                width: 2,
-              ),
+              borderSide: const BorderSide(color: Colors.red, width: 2),
             ),
             contentPadding: const EdgeInsets.all(16),
           ),

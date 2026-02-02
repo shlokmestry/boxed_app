@@ -1,9 +1,11 @@
-import 'package:boxed_app/core/widgets/theme_picker_sheet.dart';
 import 'package:flutter/material.dart';
+
 import 'package:boxed_app/features/profile/edit_profile_screen.dart';
-import 'package:boxed_app/features/profile/delete_account_screen.dart';
-import 'package:boxed_app/features/Settings/Misc/bug_report_screen.dart';
-import 'package:boxed_app/features/Settings/Misc/faq_screen.dart';
+
+// Your new screens
+import 'package:boxed_app/features/Settings/Misc/privacy_security_screen.dart';
+import 'package:boxed_app/features/Settings/Misc/help_support_screen.dart';
+import 'package:boxed_app/features/Settings/Misc/about_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -55,7 +57,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 24),
 
           // ACCOUNT section
-          _SectionHeader(title: 'ACCOUNT'),
+          const _SectionHeader(title: 'ACCOUNT'),
           const SizedBox(height: 12),
           _SettingsCard(
             children: [
@@ -76,7 +78,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 24),
 
           // NOTIFICATIONS section
-          _SectionHeader(title: 'NOTIFICATIONS'),
+          const _SectionHeader(title: 'NOTIFICATIONS'),
           const SizedBox(height: 12),
           _SettingsCard(
             children: [
@@ -88,7 +90,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   setState(() => _pushNotifications = value);
                 },
               ),
-              _Divider(),
+              const _Divider(),
               _SettingsToggleTile(
                 icon: Icons.email_outlined,
                 title: 'Email Notifications',
@@ -102,7 +104,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 24),
 
           // PRIVACY section
-          _SectionHeader(title: 'PRIVACY'),
+          const _SectionHeader(title: 'PRIVACY'),
           const SizedBox(height: 12),
           _SettingsCard(
             children: [
@@ -110,10 +112,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 icon: Icons.shield_outlined,
                 title: 'Privacy & Security',
                 onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Privacy & Security settings coming soon'),
-                      backgroundColor: Color(0xFF2A2A2A),
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const PrivacySecurityScreen(),
                     ),
                   );
                 },
@@ -123,7 +125,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           const SizedBox(height: 24),
 
           // HELP section
-          _SectionHeader(title: 'HELP'),
+          const _SectionHeader(title: 'HELP'),
           const SizedBox(height: 12),
           _SettingsCard(
             children: [
@@ -133,19 +135,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (_) => const FaqScreen()),
+                    MaterialPageRoute(
+                      builder: (_) => const HelpSupportScreen(),
+                    ),
                   );
                 },
               ),
-              _Divider(),
+              const _Divider(),
               _SettingsTile(
                 icon: Icons.info_outline,
                 title: 'About',
                 onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Boxed v1.0.0'),
-                      backgroundColor: Color(0xFF2A2A2A),
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const AboutScreen(),
                     ),
                   );
                 },
@@ -369,6 +373,8 @@ class _SettingsToggleTile extends StatelessWidget {
 }
 
 class _Divider extends StatelessWidget {
+  const _Divider();
+
   @override
   Widget build(BuildContext context) {
     return const Divider(
