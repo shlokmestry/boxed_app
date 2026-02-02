@@ -13,7 +13,7 @@ class CreateCapsuleScreen extends StatefulWidget {
 }
 
 class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
-  static const double _fontSize = 15;
+  static const int _maxDescriptionLength = 200;
 
   final _formKey = GlobalKey<FormState>();
 
@@ -23,6 +23,14 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
 
   DateTime? _selectedDateTime;
   bool _isLoading = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _descriptionController.addListener(() {
+      setState(() {}); // Update character count
+    });
+  }
 
   @override
   void dispose() {
@@ -40,12 +48,38 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
       initialDate: now.add(const Duration(days: 1)),
       firstDate: now,
       lastDate: DateTime(now.year + 5),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Colors.white,
+              surface: Color(0xFF2A2A2A),
+              background: Colors.black,
+              onSurface: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
     if (pickedDate == null) return;
 
     final pickedTime = await showTimePicker(
       context: context,
       initialTime: const TimeOfDay(hour: 12, minute: 0),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: Colors.white,
+              surface: Color(0xFF2A2A2A),
+              background: Colors.black,
+              onSurface: Colors.white,
+            ),
+          ),
+          child: child!,
+        );
+      },
     );
     if (pickedTime == null) return;
 
@@ -60,17 +94,20 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     });
   }
 
-  String _unlockDateLabel() {
+  String _formatUnlockDate() {
     final dt = _selectedDateTime;
-    if (dt == null) return 'Select';
-    return DateFormat('dd MMM yyyy').format(dt.toLocal());
+    if (dt == null) return '01/02/2026';
+    return DateFormat('MM/dd/yyyy').format(dt.toLocal());
   }
 
   Future<void> _createCapsule() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please sign in again.')),
+        const SnackBar(
+          content: Text('Please sign in again.'),
+          backgroundColor: Color(0xFF2A2A2A),
+        ),
       );
       return;
     }
@@ -78,7 +115,10 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     final isValid = _formKey.currentState?.validate() ?? false;
     if (!isValid || _selectedDateTime == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please complete all required fields.')),
+        const SnackBar(
+          content: Text('Please complete all required fields.'),
+          backgroundColor: Color(0xFF2A2A2A),
+        ),
       );
       return;
     }
@@ -86,7 +126,10 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     if (_selectedDateTime!
         .isBefore(DateTime.now().add(const Duration(minutes: 1)))) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Unlock time must be in the future.')),
+        const SnackBar(
+          content: Text('Unlock time must be in the future.'),
+          backgroundColor: Color(0xFF2A2A2A),
+        ),
       );
       return;
     }
@@ -145,173 +188,199 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
       Navigator.of(context).pop();
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: $e')),
+        SnackBar(
+          content: Text('Error: $e'),
+          backgroundColor: const Color(0xFF2A2A2A),
+        ),
       );
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  TextStyle get _baseTextStyle => const TextStyle(
-        fontSize: _fontSize,
+  int get _descriptionCharCount => _descriptionController.text.length;
+
+  TextStyle get _labelStyle => const TextStyle(
+        fontSize: 13,
         fontWeight: FontWeight.w500,
+        color: Color(0xFF9CA3AF),
+        letterSpacing: 0.2,
       );
 
-  Widget _sectionTitle(String text) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Padding(
-      padding: const EdgeInsets.only(left: 2, bottom: 8),
-      child: Text(
-        text,
-        style: _baseTextStyle.copyWith(
-          color: colorScheme.onBackground.withOpacity(0.85),
-        ),
-      ),
-    );
-  }
+  TextStyle get _inputStyle => const TextStyle(
+        fontSize: 15,
+        fontWeight: FontWeight.w400,
+        color: Colors.white,
+        height: 1.5,
+      );
 
-  Widget _card({required List<Widget> children}) {
-    final colorScheme = Theme.of(context).colorScheme;
+  TextStyle get _hintStyle => const TextStyle(
+        fontSize: 15,
+        fontWeight: FontWeight.w400,
+        color: Color(0xFF6B7280),
+        height: 1.5,
+      );
 
-    return Container(
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.outline.withOpacity(0.18)),
-      ),
-      child: Column(children: children),
-    );
-  }
-
-  Widget _divider() {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Divider(
-      height: 1,
-      thickness: 1,
-      color: colorScheme.outline.withOpacity(0.12),
-    );
-  }
-
-  Widget _textRowField({
+  Widget _buildInputField({
     required String label,
     required TextEditingController controller,
+    required String hint,
     int maxLines = 1,
-    String? hint,
-    required String? Function(String?) validator,
+    int? maxLength,
+    bool showCounter = false,
+    String? Function(String?)? validator,
   }) {
-    final colorScheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: _labelStyle),
+        const SizedBox(height: 10),
+        TextFormField(
+          controller: controller,
+          maxLines: maxLines,
+          maxLength: maxLength,
+          style: _inputStyle,
+          cursorColor: Colors.white,
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: const Color(0xFF2A2A2A),
+            hintText: hint,
+            hintStyle: _hintStyle,
+            counterText: '',
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide.none,
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide.none,
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: BorderSide.none,
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Colors.red, width: 1),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(10),
+              borderSide: const BorderSide(color: Colors.red, width: 1),
+            ),
+            errorStyle: const TextStyle(
+              color: Colors.red,
+              fontSize: 12,
+            ),
+          ),
+          validator: validator,
+        ),
+        if (showCounter)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Maximum $_maxDescriptionLength characters',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+                Text(
+                  '$_descriptionCharCount/$_maxDescriptionLength',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    );
+  }
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      child: TextFormField(
-        controller: controller,
-        maxLines: maxLines,
-        style: _baseTextStyle.copyWith(color: colorScheme.onSurface),
-        cursorColor: colorScheme.primary,
-        decoration: InputDecoration(
-          isDense: true,
-          border: InputBorder.none,
-          hintText: hint ?? label,
-          hintStyle: _baseTextStyle.copyWith(
-            color: colorScheme.onSurface.withOpacity(0.45),
+  Widget _buildDateField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('Suggested Unlock Date', style: _labelStyle),
+        const SizedBox(height: 10),
+        GestureDetector(
+          onTap: _selectUnlockDateTime,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            decoration: BoxDecoration(
+              color: const Color(0xFF2A2A2A),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    _formatUnlockDate(),
+                    style: _selectedDateTime == null ? _hintStyle : _inputStyle,
+                  ),
+                ),
+                const Icon(
+                  Icons.calendar_today,
+                  color: Color(0xFF6B7280),
+                  size: 18,
+                ),
+              ],
+            ),
           ),
         ),
-        validator: validator,
-      ),
+        const SizedBox(height: 8),
+        const Text(
+          'This is just a suggestion, you can change it later',
+          style: TextStyle(
+            fontSize: 12,
+            color: Color(0xFF6B7280),
+          ),
+        ),
+      ],
     );
   }
 
-  Widget _unlockRow() {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return InkWell(
-      onTap: _isLoading ? null : _selectUnlockDateTime,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                'Unlock date',
-                style: _baseTextStyle.copyWith(
-                  color: colorScheme.onSurface,
-                ),
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-              decoration: BoxDecoration(
-                color: colorScheme.onSurface.withOpacity(0.06),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Text(
-                    _unlockDateLabel(),
-                    style: _baseTextStyle.copyWith(
-                      color: colorScheme.onSurface.withOpacity(0.9),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(
-                    Icons.calendar_month_rounded,
-                    size: 18,
-                    color: colorScheme.onSurface.withOpacity(0.75),
-                  ),
-                ],
-              ),
-            ),
-          ],
+  Widget _buildCreateButton() {
+    return Container(
+      width: double.infinity,
+      height: 50,
+      decoration: BoxDecoration(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: Colors.white,
+          width: 1.5,
         ),
       ),
-    );
-  }
-
-  Widget _floatingCreateButton() {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Padding(
-      padding: EdgeInsets.only(
-        top: 14,
-        bottom: 16 + MediaQuery.of(context).padding.bottom,
-      ),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(14),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.25),
-              blurRadius: 18,
-              offset: const Offset(0, 10),
-            ),
-          ],
-        ),
-        child: SizedBox(
-          height: 52,
-          width: double.infinity,
-          child: FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Colors.white, // keep buttons white
-              foregroundColor: Colors.black,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14), // less pill
-              ),
-            ),
-            onPressed: _isLoading ? null : _createCapsule,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _isLoading ? null : _createCapsule,
+          borderRadius: BorderRadius.circular(10),
+          child: Center(
             child: _isLoading
-                ? SizedBox(
-                    height: 18,
-                    width: 18,
+                ? const SizedBox(
+                    height: 20,
+                    width: 20,
                     child: CircularProgressIndicator(
                       strokeWidth: 2,
-                      color: colorScheme.primary,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                     ),
                   )
-                : Text(
+                : const Text(
                     'Create Capsule',
-                    style: _baseTextStyle.copyWith(
-                      color: Colors.black,
-                      fontWeight: FontWeight.w700,
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
                     ),
                   ),
           ),
@@ -322,84 +391,84 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Scaffold(
+      backgroundColor: Colors.black,
       appBar: AppBar(
-        title: const Text('Create Capsule'),
+        backgroundColor: Colors.black,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text(
+          'Create Capsule',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
+        ),
         centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(
+              Icons.help_outline,
+              color: Colors.white,
+            ),
+            onPressed: () {
+              // Show help dialog
+            },
+          ),
+        ],
       ),
-      backgroundColor: colorScheme.background,
       body: SafeArea(
         child: Form(
           key: _formKey,
-          child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
+          child: Column(
             children: [
-              Text(
-                'Create a capsule that opens in the future.',
-                style: _baseTextStyle.copyWith(
-                  color: colorScheme.onBackground.withOpacity(0.6),
+              // Scrollable content
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.all(24),
+                  children: [
+                    _buildInputField(
+                      label: 'Capsule Name',
+                      controller: _nameController,
+                      hint: 'Summer 2025 Memories',
+                      validator: (v) {
+                        if (v == null || v.trim().isEmpty) {
+                          return 'Capsule name is required.';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 20),
+                    _buildInputField(
+                      label: 'Description',
+                      controller: _descriptionController,
+                      hint: 'What\'s this capsule about? (optional)',
+                      maxLines: 4,
+                      maxLength: _maxDescriptionLength,
+                      showCounter: true,
+                      validator: null,
+                    ),
+                    const SizedBox(height: 20),
+                    _buildDateField(),
+                    const SizedBox(height: 24),
+                  ],
                 ),
               ),
-              const SizedBox(height: 14),
 
-              _sectionTitle('Details'),
-              _card(
-                children: [
-                  _textRowField(
-                    label: 'Capsule name',
-                    controller: _nameController,
-                    hint: 'Capsule name',
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) {
-                        return 'Capsule name is required.';
-                      }
-                      return null;
-                    },
-                  ),
-                  _divider(),
-                  _textRowField(
-                    label: 'Description',
-                    controller: _descriptionController,
-                    maxLines: 3,
-                    hint: 'Description',
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) {
-                        return 'Description is required.';
-                      }
-                      return null;
-                    },
-                  ),
-                ],
+              // Bottom button
+              Padding(
+                padding: EdgeInsets.fromLTRB(
+                  24,
+                  0,
+                  24,
+                  20 + MediaQuery.of(context).padding.bottom,
+                ),
+                child: _buildCreateButton(),
               ),
-
-              const SizedBox(height: 14),
-
-              _sectionTitle('Unlock'),
-              _card(
-                children: [
-                  _unlockRow(),
-                ],
-              ),
-
-              const SizedBox(height: 14),
-
-              _sectionTitle('Note'),
-              _card(
-                children: [
-                  _textRowField(
-                    label: 'Write a note',
-                    controller: _noteController,
-                    maxLines: 3,
-                    hint: 'Write a note',
-                    validator: (_) => null, // no optional/required labels
-                  ),
-                ],
-              ),
-
-              // Button is part of the scroll (not pinned), but styled to feel floating.
-              _floatingCreateButton(),
             ],
           ),
         ),

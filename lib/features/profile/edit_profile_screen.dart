@@ -16,11 +16,13 @@ class EditProfileScreen extends StatefulWidget {
 class _EditProfileScreenState extends State<EditProfileScreen> {
   final _formKey = GlobalKey<FormState>();
   final _picker = ImagePicker();
+  
+  // Controllers for text fields
+  final _fullNameController = TextEditingController();
+  final _emailController = TextEditingController();
+  final _usernameController = TextEditingController();
 
   File? _newImage;
-  String? _firstName;
-  String? _lastName;
-  String? _username;
   String? _photoUrl;
 
   bool _isLoading = true;
@@ -31,6 +33,14 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   void initState() {
     super.initState();
     _loadProfile();
+  }
+
+  @override
+  void dispose() {
+    _fullNameController.dispose();
+    _emailController.dispose();
+    _usernameController.dispose();
+    super.dispose();
   }
 
   Future<void> _loadProfile() async {
@@ -44,9 +54,13 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     final data = doc.data();
 
     setState(() {
-      _firstName = data?['firstName'] ?? '';
-      _lastName = data?['lastName'] ?? '';
-      _username = data?['username'] ?? '';
+      final firstName = data?['firstName'] ?? '';
+      final lastName = data?['lastName'] ?? '';
+      final fullName = '$firstName $lastName'.trim();
+      
+      _fullNameController.text = fullName;
+      _emailController.text = user.email ?? '';
+      _usernameController.text = data?['username'] ?? '';
       _photoUrl = data?['photoUrl'];
       _isLoading = false;
     });
@@ -81,14 +95,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
   Future<void> _saveProfile() async {
     if (!_formKey.currentState!.validate()) return;
-    _formKey.currentState!.save();
 
     setState(() {
       _isLoading = true;
       _error = null;
     });
 
-    final uid = FirebaseAuth.instance.currentUser!.uid;
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+    
+    final uid = user.uid;
     String? imageUrl = _photoUrl;
 
     try {
@@ -96,12 +112,48 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         imageUrl = await _uploadImage(_newImage!);
       }
 
+      // Split full name into first and last name
+      final fullName = _fullNameController.text.trim();
+      final nameParts = fullName.split(' ');
+      final firstName = nameParts.isNotEmpty ? nameParts[0] : '';
+      final lastName =
+          nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
+      
+      final newEmail = _emailController.text.trim();
+      final newUsername = _usernameController.text.trim();
+
+      // Update Firestore
       await FirebaseFirestore.instance.collection('users').doc(uid).update({
-        'firstName': _firstName!.trim(),
-        'lastName': _lastName!.trim(),
-        // Username intentionally not updated
+        'firstName': firstName,
+        'lastName': lastName,
+        'username': newUsername,
         'photoUrl': imageUrl,
       });
+
+      // Update Firebase Auth email if changed
+      if (newEmail != user.email && newEmail.isNotEmpty) {
+        try {
+          await user.verifyBeforeUpdateEmail(newEmail);
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Verification email sent. Please verify to complete email change.'),
+              backgroundColor: Color(0xFF1F2937),
+            ),
+          );
+        } catch (e) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Email update failed: ${e.toString()}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+
+      // Update display name in Firebase Auth
+      await user.updateDisplayName(fullName);
 
       if (!mounted) return;
       Navigator.pop(context, true);
@@ -113,133 +165,310 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
     }
   }
 
+  String _getInitials() {
+    final fullName = _fullNameController.text;
+    if (fullName.isNotEmpty) {
+      final parts = fullName.trim().split(' ');
+      if (parts.length >= 2) {
+        return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+      } else if (parts.isNotEmpty) {
+        return parts[0][0].toUpperCase();
+      }
+    }
+    return 'U';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
     return Scaffold(
-      backgroundColor: colorScheme.background,
+      backgroundColor: Colors.black,
       appBar: AppBar(
-        title: Text("Edit Profile", style: textTheme.titleMedium),
-        backgroundColor: colorScheme.background,
-        foregroundColor: colorScheme.primary,
+        backgroundColor: Colors.black,
         elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text(
+          'Edit Profile',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
+        ),
+        centerTitle: true,
       ),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Padding(
-              padding: const EdgeInsets.all(24),
-              child: Form(
-                key: _formKey,
-                child: ListView(
-                  children: [
-                    Center(
-                      child: GestureDetector(
-                        onTap: _pickImage,
+          ? const Center(
+              child: CircularProgressIndicator(
+                color: Color(0xFFB794F6),
+              ),
+            )
+          : SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    children: [
+                      const SizedBox(height: 24),
+                      // Profile avatar
+                      Center(
                         child: Stack(
                           alignment: Alignment.center,
                           children: [
-                            CircleAvatar(
-                              radius: 44,
-                              backgroundImage: _newImage != null
-                                  ? FileImage(_newImage!)
-                                  : (_photoUrl != null && _photoUrl!.isNotEmpty)
-                                      ? NetworkImage(_photoUrl!) as ImageProvider
+                            GestureDetector(
+                              onTap: _pickImage,
+                              child: Container(
+                                width: 100,
+                                height: 100,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: (_newImage == null &&
+                                          (_photoUrl == null ||
+                                              _photoUrl!.isEmpty))
+                                      ? const LinearGradient(
+                                          colors: [
+                                            Color(0xFFEC4899),
+                                            Color(0xFF8B5CF6)
+                                          ],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        )
                                       : null,
-                              backgroundColor: colorScheme.surface,
-                              child: (_newImage == null &&
-                                      (_photoUrl == null || _photoUrl!.isEmpty))
-                                  ? Icon(Icons.person,
-                                      color: colorScheme.onSurface, size: 44)
-                                  : null,
+                                  image: _newImage != null
+                                      ? DecorationImage(
+                                          image: FileImage(_newImage!),
+                                          fit: BoxFit.cover,
+                                        )
+                                      : (_photoUrl != null &&
+                                              _photoUrl!.isNotEmpty)
+                                          ? DecorationImage(
+                                              image: NetworkImage(_photoUrl!),
+                                              fit: BoxFit.cover,
+                                            )
+                                          : null,
+                                ),
+                                child: (_newImage == null &&
+                                        (_photoUrl == null ||
+                                            _photoUrl!.isEmpty))
+                                    ? Center(
+                                        child: Text(
+                                          _getInitials(),
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontSize: 36,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      )
+                                    : null,
+                              ),
                             ),
                             if (_isUploadingImage)
                               const SizedBox(
-                                width: 64,
-                                height: 64,
-                                child: CircularProgressIndicator(strokeWidth: 2),
+                                width: 100,
+                                height: 100,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 3,
+                                  color: Color(0xFFB794F6),
+                                ),
                               ),
+                            Positioned(
+                              bottom: 0,
+                              right: 0,
+                              child: GestureDetector(
+                                onTap: _pickImage,
+                                child: Container(
+                                  width: 32,
+                                  height: 32,
+                                  decoration: BoxDecoration(
+                                    color: Colors.white,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.black,
+                                      width: 3,
+                                    ),
+                                  ),
+                                  child: const Icon(
+                                    Icons.camera_alt,
+                                    color: Colors.black,
+                                    size: 16,
+                                  ),
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 28),
-                    if (_error != null) ...[
-                      Text(_error!,
-                          style: TextStyle(color: colorScheme.error)),
-                      const SizedBox(height: 8),
-                    ],
-                    TextFormField(
-                      initialValue: _firstName ?? "",
-                      style: TextStyle(color: colorScheme.onBackground),
-                      decoration: _inputDecoration(context, 'First Name'),
-                      validator: (value) =>
-                          value == null || value.trim().isEmpty
-                              ? 'Required'
-                              : null,
-                      onSaved: (value) => _firstName = value,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      initialValue: _lastName ?? "",
-                      style: TextStyle(color: colorScheme.onBackground),
-                      decoration: _inputDecoration(context, 'Last Name'),
-                      onSaved: (value) => _lastName = value,
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      initialValue: _username ?? "",
-                      enabled: false,
-                      style: TextStyle(
-                        color: colorScheme.onBackground.withOpacity(0.6),
-                      ),
-                      decoration: _inputDecoration(context, 'Username').copyWith(
-                        // No lock icon used
-                        hintStyle: TextStyle(
-                          color: colorScheme.onSurface.withOpacity(0.4),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 28),
-                    SizedBox(
-                      width: double.infinity,
-                      height: 48,
-                      child: ElevatedButton(
-                        onPressed: _isUploadingImage ? null : _saveProfile,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: colorScheme.primary,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          textStyle: textTheme.titleMedium?.copyWith(
+                      const SizedBox(height: 16),
+                      GestureDetector(
+                        onTap: _pickImage,
+                        child: const Text(
+                          'Change Profile Photo',
+                          style: TextStyle(
+                            color: Color(0xFF3B82F6),
+                            fontSize: 15,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        child: const Text("Save"),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 32),
+                      if (_error != null) ...[
+                        Text(
+                          _error!,
+                          style: const TextStyle(color: Colors.red),
+                        ),
+                        const SizedBox(height: 16),
+                      ],
+                      // Full Name field
+                      _buildInputField(
+                        label: 'Full Name',
+                        controller: _fullNameController,
+                        hintText: 'Enter your full name',
+                        validator: (value) =>
+                            value == null || value.trim().isEmpty
+                                ? 'Required'
+                                : null,
+                      ),
+                      const SizedBox(height: 16),
+                      // Email field
+                      _buildInputField(
+                        label: 'Email',
+                        controller: _emailController,
+                        hintText: 'Enter your email',
+                        keyboardType: TextInputType.emailAddress,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Required';
+                          }
+                          if (!value.contains('@')) {
+                            return 'Invalid email';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      // Username field
+                      _buildInputField(
+                        label: 'Username',
+                        controller: _usernameController,
+                        hintText: 'Enter your username',
+                        validator: (value) =>
+                            value == null || value.trim().isEmpty
+                                ? 'Required'
+                                : null,
+                      ),
+                      const SizedBox(height: 40),
+                      // Update Profile button
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton(
+                          onPressed: _isUploadingImage ? null : _saveProfile,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: Colors.black,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            disabledBackgroundColor:
+                                Colors.white.withOpacity(0.5),
+                          ),
+                          child: const Text(
+                            'Update Profile',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.black,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
     );
   }
 
-  InputDecoration _inputDecoration(BuildContext context, String label) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-    return InputDecoration(
-      labelText: label,
-      labelStyle: textTheme.bodyMedium?.copyWith(
-        color: colorScheme.onSurface.withOpacity(0.7),
-      ),
-      filled: true,
-      fillColor: colorScheme.surface,
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
-        borderSide: BorderSide.none,
-      ),
+  Widget _buildInputField({
+    required String label,
+    required TextEditingController controller,
+    required String hintText,
+    TextInputType? keyboardType,
+    String? Function(String?)? validator,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: Color(0xFF9CA3AF),
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          keyboardType: keyboardType,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 15,
+          ),
+          decoration: InputDecoration(
+            filled: true,
+            fillColor: const Color(0xFF1F2937),
+            hintText: hintText,
+            hintStyle: const TextStyle(
+              color: Color(0xFF6B7280),
+              fontSize: 15,
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                color: Color(0xFF374151),
+                width: 1,
+              ),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                color: Color(0xFF374151),
+                width: 1,
+              ),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                color: Color(0xFF3B82F6),
+                width: 2,
+              ),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                color: Colors.red,
+                width: 1,
+              ),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(
+                color: Colors.red,
+                width: 2,
+              ),
+            ),
+            contentPadding: const EdgeInsets.all(16),
+          ),
+          validator: validator,
+        ),
+      ],
     );
   }
 }
