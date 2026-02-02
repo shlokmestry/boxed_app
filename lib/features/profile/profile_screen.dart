@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:boxed_app/features/auth/login_signup.dart';
 
 import 'package:boxed_app/core/services/boxed_encryption_service.dart';
 import 'package:boxed_app/core/state/user_crypto_state.dart';
@@ -91,17 +92,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
     }
   }
 
-  Future<void> _logout() async {
-    final uid = FirebaseAuth.instance.currentUser?.uid;
-    if (uid != null) {
-      await BoxedEncryptionService.clearUserMasterKey(uid);
-    }
-    UserCryptoState.clear();
-    await FirebaseAuth.instance.signOut();
-
-    if (!mounted) return;
-    Navigator.of(context).popUntil((route) => route.isFirst);
+ Future<void> _logout() async {
+  final uid = FirebaseAuth.instance.currentUser?.uid;
+  if (uid != null) {
+    await BoxedEncryptionService.clearUserMasterKey(uid);
   }
+  UserCryptoState.clear();
+  await FirebaseAuth.instance.signOut();
+
+  if (!mounted) return;
+
+  Navigator.of(context, rootNavigator: true).pushAndRemoveUntil(
+    MaterialPageRoute(builder: (_) => const LoginSignup()),
+    (_) => false,
+  );
+}
 
   String _getInitials(String firstName, String lastName) {
     final initials = ((firstName.isNotEmpty ? firstName[0] : '') +

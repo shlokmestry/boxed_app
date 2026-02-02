@@ -9,9 +9,10 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 
 import '../capsules/screens/home_screen.dart';
 import 'package:boxed_app/core/state/user_crypto_state.dart';
-
-// Import your forgot password screen
 import 'forgot_password_screen.dart';
+
+// ⭐ Import the main.dart helpers
+import 'package:boxed_app/main.dart' show disableAuthNavigation, enableAuthNavigation;
 
 class LoginSignup extends StatefulWidget {
   const LoginSignup({super.key});
@@ -23,6 +24,7 @@ class LoginSignup extends StatefulWidget {
 class _LoginSignupState extends State<LoginSignup> {
   bool isLogin = true;
   bool obscurePassword = true;
+  bool _isLoading = false;
 
   final emailController = TextEditingController();
   final passwordController = TextEditingController();
@@ -43,7 +45,6 @@ class _LoginSignupState extends State<LoginSignup> {
   void initState() {
     super.initState();
     _requestNotificationPermission();
-    _logFcmToken();
   }
 
   @override
@@ -53,13 +54,18 @@ class _LoginSignupState extends State<LoginSignup> {
     super.dispose();
   }
 
-  void _requestNotificationPermission() async {
-    await FirebaseMessaging.instance.requestPermission();
-  }
-
-  void _logFcmToken() async {
-    final token = await FirebaseMessaging.instance.getToken();
-    debugPrint('📱 FCM Token: $token');
+  Future<void> _requestNotificationPermission() async {
+    try {
+      await FirebaseMessaging.instance.requestPermission();
+      // Only try to get FCM token on real devices, not simulators
+      if (mounted) {
+        final token = await FirebaseMessaging.instance.getToken();
+        debugPrint('📱 FCM Token: $token');
+      }
+    } catch (e) {
+      // Ignore FCM errors in simulator
+      debugPrint('⚠️ FCM not available (likely simulator): $e');
+    }
   }
 
   void _showFieldErrors({String? emailMsg, String? passwordMsg}) {
@@ -109,6 +115,9 @@ class _LoginSignupState extends State<LoginSignup> {
               // Email
               TextField(
                 controller: emailController,
+                enabled: !_isLoading,
+                keyboardType: TextInputType.emailAddress,
+                autocorrect: false,
                 onChanged: (_) {
                   if (emailError != null) {
                     setState(() => emailError = null);
@@ -132,6 +141,9 @@ class _LoginSignupState extends State<LoginSignup> {
               TextField(
                 controller: passwordController,
                 obscureText: obscurePassword,
+                enabled: !_isLoading,
+                autocorrect: false,
+                enableSuggestions: false,
                 onChanged: (_) {
                   if (passwordError != null) {
                     setState(() => passwordError = null);
@@ -160,38 +172,43 @@ class _LoginSignupState extends State<LoginSignup> {
 
               const SizedBox(height: 6),
 
-              // Forgot password link (works for both login & signup)
-              Align(
-                alignment: Alignment.centerRight,
-                child: TextButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const ForgotPasswordScreen(),
+              // Forgot password
+              if (isLogin)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton(
+                    onPressed: _isLoading
+                        ? null
+                        : () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const ForgotPasswordScreen(),
+                              ),
+                            );
+                          },
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: const Size(0, 0),
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    child: Text(
+                      'Forgot password?',
+                      style: textTheme.bodySmall?.copyWith(
+                        color: colorScheme.primary,
+                        fontWeight: FontWeight.w600,
                       ),
-                    );
-                  },
-                  style: TextButton.styleFrom(
-                    padding: EdgeInsets.zero,
-                    minimumSize: const Size(0, 0),
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                  child: Text(
-                    'Forgot password?',
-                    style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.primary,
-                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
-              ),
 
               const SizedBox(height: 20),
 
+              // Auth Button
               Buttons(
                 label: isLogin ? 'Log In' : 'Sign Up',
-                onPressed: _handleAuth,
+                onPressed: _isLoading ? null : _handleAuth,
+                isLoading: _isLoading,
               ),
 
               const SizedBox(height: 10),
@@ -205,13 +222,15 @@ class _LoginSignupState extends State<LoginSignup> {
                         : "Already have an account?",
                   ),
                   GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        isLogin = !isLogin;
-                        emailError = null;
-                        passwordError = null;
-                      });
-                    },
+                    onTap: _isLoading
+                        ? null
+                        : () {
+                            setState(() {
+                              isLogin = !isLogin;
+                              emailError = null;
+                              passwordError = null;
+                            });
+                          },
                     child: Text(
                       isLogin ? " Sign up" : " Log in",
                       style: TextStyle(
@@ -236,43 +255,95 @@ class _LoginSignupState extends State<LoginSignup> {
     final email = emailController.text.trim().toLowerCase();
     final password = passwordController.text.trim();
 
+    // Validation
+    if (email.isEmpty) {
+      _showFieldErrors(emailMsg: 'Please enter your email');
+      return;
+    }
+    if (!email.contains('@')) {
+      _showFieldErrors(emailMsg: 'Please enter a valid email');
+      return;
+    }
+    if (password.isEmpty) {
+      _showFieldErrors(passwordMsg: 'Please enter your password');
+      return;
+    }
+    if (password.length < 6) {
+      _showFieldErrors(
+          passwordMsg: 'Password must be at least 6 characters');
+      return;
+    }
+
+    // Store the current mode to prevent state changes during async operations
+    final currentMode = isLogin;
+    
+    setState(() => _isLoading = true);
+
     try {
-      if (isLogin) {
-        // ───────── LOGIN ─────────
-        final credential = await FirebaseAuth.instance
-            .signInWithEmailAndPassword(
+      if (currentMode) {
+        // ─────────────────────────────────────────────
+        // LOGIN FLOW
+        // ─────────────────────────────────────────────
+        debugPrint('🟢 Starting login process for: $email');
+        
+        final credential =
+            await FirebaseAuth.instance.signInWithEmailAndPassword(
           email: email,
           password: password,
         );
 
         final user = credential.user!;
-
-        // 🔐 Initialize master key (Option A)
+        debugPrint('🟢 User logged in: ${user.uid}');
+        
+        // Initialize encryption
         await UserCryptoState.initializeForUser(
           userId: user.uid,
           password: password,
         );
 
+        debugPrint('🟢 Crypto initialized');
+
+        // Check if user has username
         final hasUsername = await _userHasUsername(user.uid);
+        debugPrint('🟢 Has username: $hasUsername');
+        
+        if (!mounted) {
+          debugPrint('🔴 Widget not mounted, cannot navigate');
+          return;
+        }
+        
+        // Clear loading state before navigation
+        setState(() => _isLoading = false);
+        
         _navigateAccordingToUsername(hasUsername);
+        return; // Exit early to prevent error handling blocks from running
       } else {
-        // ───────── SIGN UP ─────────
-        final credential = await FirebaseAuth.instance
-            .createUserWithEmailAndPassword(
+        // ─────────────────────────────────────────────
+        // SIGNUP FLOW
+        // ─────────────────────────────────────────────
+        debugPrint('🟢 Starting signup process for: $email');
+        
+        // ⭐ CRITICAL FIX: Disable automatic auth navigation
+        disableAuthNavigation();
+        
+        final credential =
+            await FirebaseAuth.instance.createUserWithEmailAndPassword(
           email: email,
           password: password,
         );
 
+        debugPrint('🟢 User created in Firebase Auth: ${credential.user!.uid}');
+
         final user = credential.user!;
         final encryptionSalt = _generateEncryptionSalt();
         final usernameBase = user.email!.split('@')[0];
-        final displayName = _capitalize(usernameBase);
 
+        // Create user document in Firestore
         await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
             .set({
-          'displayName': displayName,
+          'displayName': _capitalize(usernameBase),
           'email': user.email,
           'email_lowercase': email,
           'bio': '',
@@ -280,47 +351,123 @@ class _LoginSignupState extends State<LoginSignup> {
           'encryptionSalt': encryptionSalt,
           'createdAt': Timestamp.now(),
           'darkMode': false,
+          // Note: username will be set in ChooseUsernameScreen
         }, SetOptions(merge: true));
 
-        // 🔐 IMPORTANT: initialize master key immediately after signup
+        debugPrint('🟢 User document created in Firestore');
+
+        // Initialize encryption
         await UserCryptoState.initializeForUser(
           userId: user.uid,
           password: password,
         );
 
-        Navigator.pushReplacement(
+        debugPrint('🟢 Crypto initialized, navigating to username screen');
+
+        if (!mounted) {
+          debugPrint('🔴 Widget not mounted, cannot navigate');
+          enableAuthNavigation(); // Re-enable before exiting
+          return;
+        }
+
+        // Clear loading state before navigation
+        setState(() => _isLoading = false);
+
+        // Navigate to username selection
+        await Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(
             builder: (_) => const ChooseUsernameScreen(),
           ),
+          (route) => false, // Remove all previous routes
         );
-        return;
+        
+        debugPrint('🟢 Navigation to username screen complete');
+        
+        // ⭐ Re-enable auth navigation after successful navigation
+        enableAuthNavigation();
+        return; // Exit early to prevent error handling blocks from running
       }
-
-      // Update last login
-      final currentUser = FirebaseAuth.instance.currentUser;
-      if (currentUser != null) {
-        await FirebaseFirestore.instance
-            .collection('users')
-            .doc(currentUser.uid)
-            .set(
-          {'lastLogin': Timestamp.now()},
-          SetOptions(merge: true),
-        );
+    } on FirebaseAuthException catch (e) {
+      debugPrint('🔴 Auth error: ${e.code} - ${e.message}');
+      
+      // Re-enable auth navigation on error
+      enableAuthNavigation();
+      
+      String errorMessage;
+      switch (e.code) {
+        case 'email-already-in-use':
+          errorMessage = 'This email is already registered. Please log in.';
+          break;
+        case 'invalid-email':
+          errorMessage = 'Please enter a valid email address.';
+          break;
+        case 'operation-not-allowed':
+          errorMessage = 'Email/password accounts are not enabled.';
+          break;
+        case 'weak-password':
+          errorMessage = 'Password is too weak. Please use a stronger password.';
+          break;
+        case 'user-disabled':
+          errorMessage = 'This account has been disabled.';
+          break;
+        case 'user-not-found':
+          errorMessage = 'No account found with this email.';
+          break;
+        case 'wrong-password':
+          errorMessage = 'Incorrect password. Please try again.';
+          break;
+        case 'invalid-credential':
+          errorMessage = 'Invalid email or password.';
+          break;
+        case 'too-many-requests':
+          errorMessage = 'Too many attempts. Please try again later.';
+          break;
+        default:
+          errorMessage = e.message ?? 'Authentication failed. Please try again.';
+      }
+      
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          emailError = errorMessage;
+          passwordError = null;
+        });
       }
     } catch (e) {
-      _showFieldErrors(emailMsg: e.toString());
+      debugPrint('🔴 Unexpected error: $e');
+      
+      // Re-enable auth navigation on error
+      enableAuthNavigation();
+      
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          emailError = 'An unexpected error occurred. Please try again.';
+          passwordError = null;
+        });
+      }
     }
   }
 
   Future<bool> _userHasUsername(String uid) async {
-    final doc =
-        await FirebaseFirestore.instance.collection('users').doc(uid).get();
-    return (doc.data()?['username'] ?? '').toString().isNotEmpty;
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(uid)
+          .get();
+      
+      if (!doc.exists) return false;
+      
+      final username = doc.data()?['username'];
+      return username != null && username.toString().trim().isNotEmpty;
+    } catch (e) {
+      debugPrint('🔴 Error checking username: $e');
+      return false;
+    }
   }
 
-  Future<void> _navigateAccordingToUsername(bool hasUsername) async {
-    if (!mounted) return;
+  void _navigateAccordingToUsername(bool hasUsername) {
     Navigator.pushReplacement(
       context,
       MaterialPageRoute(

@@ -99,14 +99,11 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Boxed',
-
-      // Theme mode selection is still controlled by ThemeProvider
       themeMode: themeProvider.themeMode,
-
-      // ✅ Single source of truth for fonts/colors/sizes
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
-
+      
+      // ⭐ SIMPLIFIED: No auth listener - let LoginSignup handle navigation
       home: FutureBuilder<bool>(
         future: _getOnboardingSeen(),
         builder: (context, onboardingSnapshot) {
@@ -128,84 +125,56 @@ class MyApp extends StatelessWidget {
             return const SplashScreen();
           }
 
-          return StreamBuilder<User?>(
-            stream: FirebaseAuth.instance.authStateChanges(),
-            builder: (context, authSnapshot) {
-              if (authSnapshot.connectionState == ConnectionState.waiting) {
+          // ⭐ Check current user state once on app start
+          final currentUser = FirebaseAuth.instance.currentUser;
+          
+          if (currentUser == null) {
+            // Not logged in
+            return const LoginSignup();
+          }
+
+          // User is logged in - check crypto and username
+          return FutureBuilder<void>(
+            future: UserCryptoState.initialize(currentUser.uid),
+            builder: (context, cryptoSnapshot) {
+              if (cryptoSnapshot.connectionState != ConnectionState.done) {
                 return const Scaffold(
                   body: Center(child: CircularProgressIndicator()),
                 );
               }
 
-              final user = authSnapshot.data;
-
-              if (user == null) {
+              // If crypto fails, force re-login
+              if (cryptoSnapshot.hasError) {
+                debugPrint('🔴 Crypto initialization failed, forcing re-login');
                 return const LoginSignup();
               }
 
-              // ✅ Crypto bootstrap is REQUIRED for capsule decryption
-              return FutureBuilder<void>(
-                future: UserCryptoState.initialize(user.uid),
-                builder: (context, cryptoSnapshot) {
-                  if (cryptoSnapshot.connectionState != ConnectionState.done) {
+              // Check username
+              return FutureBuilder<DocumentSnapshot>(
+                future: FirebaseFirestore.instance
+                    .collection('users')
+                    .doc(currentUser.uid)
+                    .get(),
+                builder: (context, userDocSnapshot) {
+                  if (userDocSnapshot.connectionState != ConnectionState.done) {
                     return const Scaffold(
                       body: Center(child: CircularProgressIndicator()),
                     );
                   }
 
-                  // If we can't load a persisted master key, force login again
-                  if (cryptoSnapshot.hasError) {
+                  if (userDocSnapshot.hasError) {
+                    debugPrint('🔴 Failed to load user doc: ${userDocSnapshot.error}');
                     return const LoginSignup();
                   }
 
-                  // Username check
-                  return FutureBuilder<DocumentSnapshot>(
-                    future: FirebaseFirestore.instance
-                        .collection('users')
-                        .doc(user.uid)
-                        .get(),
-                    builder: (context, userDocSnapshot) {
-                      if (userDocSnapshot.connectionState !=
-                          ConnectionState.done) {
-                        return const Scaffold(
-                          body: Center(child: CircularProgressIndicator()),
-                        );
-                      }
+                  final data = userDocSnapshot.data?.data() as Map<String, dynamic>?;
+                  final hasUsername = data != null &&
+                      data['username'] != null &&
+                      data['username'].toString().trim().isNotEmpty;
 
-                      if (userDocSnapshot.hasError) {
-                        return Scaffold(
-                          body: Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const Text('Failed to load profile'),
-                                ElevatedButton(
-                                  onPressed: () => Navigator.pushReplacement(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => const LoginSignup(),
-                                    ),
-                                  ),
-                                  child: const Text('Go to Login'),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      }
-
-                      final data = userDocSnapshot.data?.data()
-                          as Map<String, dynamic>?;
-
-                      final hasUsername = data != null &&
-                          data['username'] != null &&
-                          data['username'].toString().trim().isNotEmpty;
-
-                      return hasUsername
-                          ? const HomeScreen()
-                          : const ChooseUsernameScreen();
-                    },
-                  );
+                  return hasUsername 
+                      ? const HomeScreen() 
+                      : const ChooseUsernameScreen();
                 },
               );
             },
@@ -214,4 +183,14 @@ class MyApp extends StatelessWidget {
       ),
     );
   }
+}
+
+// ⭐ These functions are now no-ops since we removed the auth listener
+// Keeping them for compatibility with login_signup.dart
+void disableAuthNavigation() {
+  debugPrint('🔒 Auth navigation disabled (no-op in simplified version)');
+}
+
+void enableAuthNavigation() {
+  debugPrint('🔓 Auth navigation enabled (no-op in simplified version)');
 }
