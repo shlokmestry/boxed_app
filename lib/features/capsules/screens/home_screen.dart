@@ -233,16 +233,17 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  String _getEmptyText() {
-    switch (_selectedFilter) {
-      case CapsuleFilter.all:
-        return 'No capsules found.';
-      case CapsuleFilter.upcoming:
-        return 'No upcoming capsules.';
-      case CapsuleFilter.recentlyUnlocked:
-        return 'No recently unlocked capsules.';
-    }
+ String _getEmptyText() {
+  switch (_selectedFilter) {
+    case CapsuleFilter.all:
+      return 'No capsules in sight… suspiciously tidy,\nisn’t it?';
+    case CapsuleFilter.upcoming:
+      return 'Nothing scheduled yet.\nSet an unlock date.';
+    case CapsuleFilter.recentlyUnlocked:
+      return 'Nothing unlocked lately.\nGive it time.';
   }
+}
+
 }
 
 class _FilterDropdown extends StatelessWidget {
@@ -332,16 +333,18 @@ class _CapsulesList extends StatelessWidget {
     final controller = context.read<CapsuleController>();
 
     if (capsules.isEmpty) {
-      return Center(
-        child: Text(
-          emptyText,
-          style: const TextStyle(
-            color: Color(0xFF6B7280),
-            fontSize: 16,
-          ),
-        ),
-      );
-    }
+  return Center(
+    child: Text(
+      emptyText,
+      textAlign: TextAlign.center,
+      style: const TextStyle(
+        color: Color(0xFF6B7280),
+        fontSize: 16,
+      ),
+    ),
+  );
+}
+
 
     return RefreshIndicator(
       onRefresh: () => controller.loadCapsules(userId),
