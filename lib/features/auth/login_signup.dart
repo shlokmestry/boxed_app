@@ -10,6 +10,9 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import '../capsules/screens/home_screen.dart';
 import 'package:boxed_app/core/state/user_crypto_state.dart';
 
+// Import your forgot password screen
+import 'forgot_password_screen.dart';
+
 class LoginSignup extends StatefulWidget {
   const LoginSignup({super.key});
 
@@ -85,7 +88,7 @@ class _LoginSignupState extends State<LoginSignup> {
             children: [
               Center(
                 child: Text(
-                  'Welcome to Boxed',
+                  isLogin ? 'Welcome back to Boxed' : 'Welcome to Boxed',
                   style: textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: colorScheme.primary,
@@ -151,6 +154,35 @@ class _LoginSignupState extends State<LoginSignup> {
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(10),
                     borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 6),
+
+              // Forgot password link (works for both login & signup)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const ForgotPasswordScreen(),
+                      ),
+                    );
+                  },
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: const Size(0, 0),
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                  child: Text(
+                    'Forgot password?',
+                    style: textTheme.bodySmall?.copyWith(
+                      color: colorScheme.primary,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ),

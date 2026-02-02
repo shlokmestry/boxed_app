@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:boxed_app/core/services/boxed_encryption_service.dart';
 import 'package:boxed_app/core/state/user_crypto_state.dart';
-import 'package:boxed_app/features/Settings/Misc/faq_screen.dart';
+
 import 'package:boxed_app/features/Settings/Misc/settings_screen.dart';
 import 'package:boxed_app/features/profile/edit_profile_screen.dart';
 
@@ -11,8 +11,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:intl/intl.dart';
-import 'package:share_plus/share_plus.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -29,14 +27,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return null;
 
-    final doc =
-        await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    final doc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(user.uid)
+        .get();
     if (!doc.exists) return null;
 
     final data = doc.data();
     if (data == null) return null;
 
-    // Capsule count (solo MVP)
+    // Capsule count
     final capsSnap = await FirebaseFirestore.instance
         .collection('capsules')
         .where('creatorId', isEqualTo: user.uid)
@@ -82,15 +82,16 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
     if (newUrl != null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Avatar updated!')),
+        const SnackBar(
+          content: Text('Avatar updated!'),
+          backgroundColor: Color(0xFF2A2A2A),
+        ),
       );
       setState(() {}); // refresh FutureBuilder
     }
   }
 
   Future<void> _logout() async {
-    Navigator.of(context).pop(); // close drawer/dialogs if any
-
     final uid = FirebaseAuth.instance.currentUser?.uid;
     if (uid != null) {
       await BoxedEncryptionService.clearUserMasterKey(uid);
@@ -102,27 +103,43 @@ class _ProfileScreenState extends State<ProfileScreen> {
     Navigator.of(context).popUntil((route) => route.isFirst);
   }
 
+  String _getInitials(String firstName, String lastName) {
+    final initials = ((firstName.isNotEmpty ? firstName[0] : '') +
+            (lastName.isNotEmpty ? lastName[0] : ''))
+        .trim();
+    return initials.isNotEmpty ? initials.toUpperCase() : 'U';
+  }
+
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
     return Scaffold(
-      backgroundColor: colorScheme.background,
+      backgroundColor: Colors.black,
       appBar: AppBar(
-        title: Text('Profile', style: textTheme.titleLarge),
-        centerTitle: true,
+        backgroundColor: Colors.black,
         elevation: 0,
-        backgroundColor: colorScheme.background,
-        foregroundColor: colorScheme.primary,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: const Text(
+          'Profile',
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w700,
+            color: Colors.white,
+          ),
+        ),
+        centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.share),
-            onPressed: () async {
-              final data = await _getUserProfile();
-              final username = (data?['username'] ?? 'myprofile').toString();
-              final shareLink = "https://boxed.app/u/$username";
-              Share.share("Check out my Boxed profile: $shareLink");
+            icon: const Icon(Icons.settings_outlined, color: Colors.white),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const SettingsScreen(),
+                ),
+              );
             },
           ),
         ],
@@ -131,16 +148,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
         future: _getUserProfile(),
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
+            return const Center(
+              child: CircularProgressIndicator(
+                color: Colors.white,
+              ),
+            );
           }
 
           final data = snapshot.data;
           if (data == null) {
-            return Center(
+            return const Center(
               child: Text(
                 'No profile data found.',
-                style: textTheme.bodyLarge?.copyWith(
-                  color: colorScheme.onBackground.withOpacity(0.85),
+                style: TextStyle(
+                  color: Color(0xFF6B7280),
+                  fontSize: 16,
                 ),
               ),
             );
@@ -151,152 +173,188 @@ class _ProfileScreenState extends State<ProfileScreen> {
           final username = (data['username'] ?? '').toString();
           final photoUrl = (data['photoUrl'] ?? '').toString();
           final createdAt = data['createdAt'];
-          final createdAtDate =
-              createdAt is Timestamp ? createdAt.toDate() : null;
-
+          final createdAtDate = createdAt is Timestamp ? createdAt.toDate() : null;
           final capsulesCount = (data['capsulesCount'] ?? 0) as int;
 
-          final initials = ((firstName.isNotEmpty ? firstName[0] : '') +
-                  (lastName.isNotEmpty ? lastName[0] : ''))
-              .trim();
+          final displayName = '$firstName $lastName'.trim();
+          final memberSinceYear = createdAtDate?.year.toString() ?? '';
 
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
-            children: [
-              // Header
-              Center(
-                child: GestureDetector(
-                  onTap: _isUploadingAvatar ? null : _pickAndUploadAvatar,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      CircleAvatar(
-                        radius: 48,
-                        backgroundColor: colorScheme.surface,
-                        backgroundImage:
-                            photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
-                        child: photoUrl.isNotEmpty
-                            ? null
-                            : Text(
-                                (initials.isNotEmpty
-                                        ? initials
-                                        : (username.isNotEmpty
-                                            ? username[0]
-                                            : '?'))
-                                    .toUpperCase(),
-                                style: textTheme.headlineMedium?.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                  color: colorScheme.onSurface,
+          return SingleChildScrollView(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: MediaQuery.of(context).size.height -
+                    MediaQuery.of(context).padding.top -
+                    kToolbarHeight,
+              ),
+              child: IntrinsicHeight(
+                child: Column(
+                  children: [
+                    // Gradient header section
+                    Container(
+                      width: double.infinity,
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Color(0xFFEC4899), Color(0xFF8B5CF6)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                      ),
+                      padding: const EdgeInsets.fromLTRB(24, 32, 24, 32),
+                      child: Column(
+                        children: [
+                          // Avatar
+                          GestureDetector(
+                            onTap: _isUploadingAvatar ? null : _pickAndUploadAvatar,
+                            child: Stack(
+                              alignment: Alignment.center,
+                              children: [
+                                Container(
+                                  width: 100,
+                                  height: 100,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Colors.white,
+                                    image: photoUrl.isNotEmpty
+                                        ? DecorationImage(
+                                            image: NetworkImage(photoUrl),
+                                            fit: BoxFit.cover,
+                                          )
+                                        : null,
+                                    border: Border.all(
+                                      color: Colors.white,
+                                      width: 3,
+                                    ),
+                                  ),
+                                  child: photoUrl.isEmpty
+                                      ? Center(
+                                          child: Text(
+                                            _getInitials(firstName, lastName),
+                                            style: const TextStyle(
+                                              color: Color(0xFF8B5CF6),
+                                              fontSize: 36,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                          ),
+                                        )
+                                      : null,
+                                ),
+                                if (_isUploadingAvatar)
+                                  const SizedBox(
+                                    width: 100,
+                                    height: 100,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 3,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          // Name and verified badge
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Text(
+                                displayName.isNotEmpty ? displayName : 'User',
+                                style: const TextStyle(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
                                 ),
                               ),
+                              const SizedBox(width: 6),
+                              const Icon(
+                                Icons.verified,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          // Username
+                          Text(
+                            '@${username.isNotEmpty ? username : 'username'}',
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.white70,
+                            ),
+                          ),
+                        ],
                       ),
-                      if (_isUploadingAvatar)
-                        const SizedBox(
-                          height: 28,
-                          width: 28,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+
+                    // Black content section
+                    Expanded(
+                      child: Container(
+                        width: double.infinity,
+                        color: Colors.black,
+                        padding: const EdgeInsets.all(24),
+                        child: Column(
+                          children: [
+                            // Member since
+                            if (memberSinceYear.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 24),
+                                child: Text(
+                                  'Member since $memberSinceYear',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.white.withOpacity(0.6),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+
+                            // Capsules count - simple text format
+                            Column(
+                              children: [
+                                Text(
+                                  capsulesCount.toString(),
+                                  style: const TextStyle(
+                                    fontSize: 48,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Capsules',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w500,
+                                    color: Colors.white.withOpacity(0.6),
+                                  ),
+                                ),
+                              ],
+                            ),
+                            
+                            const Spacer(),
+
+                            // Sign Out text at very bottom center
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 24),
+                              child: GestureDetector(
+                                onTap: _logout,
+                                child: const Text(
+                                  'Sign Out',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.red,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                    ],
-                  ),
-                ),
-              ),
-              const SizedBox(height: 14),
-
-              Center(
-                child: Text(
-                  username.isNotEmpty ? username : 'User',
-                  style: textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.w800,
-                    color: colorScheme.onBackground,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 6),
-
-              if (createdAtDate != null)
-                Center(
-                  child: Text(
-                    'Member since ${DateFormat('MMM yyyy').format(createdAtDate)}',
-                    style: textTheme.bodySmall?.copyWith(
-                      color: colorScheme.onBackground.withOpacity(0.60),
-                      fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                ),
-              const SizedBox(height: 14),
-
-              // Minimal stat (keep only capsules)
-              _PillStat(
-                label: 'Capsules',
-                value: capsulesCount.toString(),
-              ),
-
-              const SizedBox(height: 14),
-
-              // Edit profile button
-              SizedBox(
-                height: 48,
-                child: FilledButton(
-                  style: FilledButton.styleFrom(
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
-                  onPressed: () async {
-                    final updated = await Navigator.push(
-                      context,
-                      MaterialPageRoute(builder: (_) => const EditProfileScreen()),
-                    );
-                    if (updated == true && mounted) {
-                      setState(() {});
-                    }
-                  },
-                  child: const Text('Edit profile'),
+                  ],
                 ),
               ),
-
-              const SizedBox(height: 16),
-
-              // Actions (no headers like Account/App/Danger zone)
-              _CardGroup(
-                children: [
-                  _GroupTile(
-                    icon: Icons.settings_rounded,
-                    label: 'Settings',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                      );
-                    },
-                  ),
-                  _GroupDivider(),
-                  _GroupTile(
-                    icon: Icons.help_outline_rounded,
-                    label: 'Help & support',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const FaqScreen()),
-                      );
-                    },
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 12),
-
-              _CardGroup(
-                children: [
-                  _GroupTile(
-                    icon: Icons.logout_rounded,
-                    label: 'Log out',
-                    destructive: true,
-                    onTap: () async => _logout(),
-                  ),
-                ],
-              ),
-            ],
+            ),
           );
         },
       ),
@@ -304,127 +362,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
   }
 }
 
-class _PillStat extends StatelessWidget {
-  final String label;
-  final String value;
-
-  const _PillStat({required this.label, required this.value});
+class _Divider extends StatelessWidget {
+  const _Divider();
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    return Center(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: BoxDecoration(
-          color: colorScheme.surface,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: colorScheme.outline.withOpacity(0.12)),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              value,
-              style: textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.w900,
-                color: colorScheme.onSurface,
-              ),
-            ),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: textTheme.bodyMedium?.copyWith(
-                fontWeight: FontWeight.w700,
-                color: colorScheme.onSurface.withOpacity(0.7),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _CardGroup extends StatelessWidget {
-  final List<Widget> children;
-
-  const _CardGroup({required this.children});
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
-      decoration: BoxDecoration(
-        color: colorScheme.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colorScheme.outline.withOpacity(0.12)),
-      ),
-      child: Column(children: children),
-    );
-  }
-}
-
-class _GroupDivider extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Divider(
+    return const Divider(
       height: 1,
       thickness: 1,
-      color: colorScheme.outline.withOpacity(0.10),
-    );
-  }
-}
-
-class _GroupTile extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final bool destructive;
-
-  const _GroupTile({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.destructive = false,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    final fg = destructive ? colorScheme.error : colorScheme.onSurface;
-
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
-        child: Row(
-          children: [
-            Icon(icon, color: fg),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                label,
-                style: textTheme.bodyLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: fg,
-                ),
-              ),
-            ),
-            Icon(
-              Icons.chevron_right_rounded,
-              color: colorScheme.onSurface.withOpacity(0.35),
-            ),
-          ],
-        ),
-      ),
+      color: Color(0xFF1A1A1A),
+      indent: 16,
+      endIndent: 16,
     );
   }
 }
