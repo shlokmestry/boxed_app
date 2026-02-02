@@ -45,7 +45,7 @@ class _ChooseUsernameScreenState extends State<ChooseUsernameScreen> {
   Future<void> _checkIfUserAlreadyHasUsername() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) {
-      debugPrint('🔴 No user found in ChooseUsernameScreen');
+      debugPrint('No user found in ChooseUsernameScreen');
       return;
     }
 
@@ -57,7 +57,7 @@ class _ChooseUsernameScreenState extends State<ChooseUsernameScreen> {
 
       final existingUsername = doc.data()?['username'];
       if (existingUsername != null && existingUsername.toString().trim().isNotEmpty) {
-        debugPrint('🟡 User already has username: $existingUsername, navigating to home');
+        debugPrint('User already has username: $existingUsername, navigating to home');
         if (mounted) {
           Navigator.pushReplacement(
             context,
@@ -70,7 +70,7 @@ class _ChooseUsernameScreenState extends State<ChooseUsernameScreen> {
       // User doesn't have username yet, suggest one
       _suggestUsername();
     } catch (e) {
-      debugPrint('🔴 Error checking existing username: $e');
+      debugPrint('Error checking existing username: $e');
       _suggestUsername();
     }
   }
@@ -168,21 +168,21 @@ class _ChooseUsernameScreenState extends State<ChooseUsernameScreen> {
     final user = FirebaseAuth.instance.currentUser;
 
     if (!_isAvailable || username.isEmpty || user == null) {
-      debugPrint('🔴 Cannot confirm username: available=$_isAvailable, username=$username, user=${user?.uid}');
+      debugPrint('Cannot confirm username: available=$_isAvailable, username=$username, user=${user?.uid}');
       return;
     }
 
     setState(() => _isSaving = true);
 
     try {
-      debugPrint('🟢 Setting username: $username for user: ${user.uid}');
+      debugPrint('Setting username: $username for user: ${user.uid}');
 
       await FirebaseFirestore.instance.collection('users').doc(user.uid).set({
         'username': username,
         'username_lowercase': username.toLowerCase(),
       }, SetOptions(merge: true));
 
-      debugPrint('🟢 Username saved successfully');
+      debugPrint('Username saved successfully');
 
       if (!mounted) return;
 
@@ -193,9 +193,9 @@ class _ChooseUsernameScreenState extends State<ChooseUsernameScreen> {
         (route) => false,
       );
 
-      debugPrint('🟢 Navigated to home screen');
+      debugPrint('Navigated to home screen');
     } catch (e) {
-      debugPrint('🔴 Error saving username: $e');
+      debugPrint('Error saving username: $e');
       
       if (mounted) {
         setState(() {
