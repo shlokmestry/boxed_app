@@ -13,6 +13,9 @@ class CreateCapsuleScreen extends StatefulWidget {
 }
 
 class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
+
+  final GlobalKey<TooltipState> _helpTipKey = GlobalKey<TooltipState>();
+
   static const int _maxDescriptionLength = 200;
 
   final _formKey = GlobalKey<FormState>();
@@ -309,7 +312,7 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Suggested Unlock Date', style: _labelStyle),
+        Text('Capsule Unlock Date', style: _labelStyle),
         const SizedBox(height: 10),
         GestureDetector(
           onTap: _selectUnlockDateTime,
@@ -337,13 +340,7 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        const Text(
-          'This is just a suggestion, you can change it later',
-          style: TextStyle(
-            fontSize: 12,
-            color: Color(0xFF6B7280),
-          ),
-        ),
+      
       ],
     );
   }
@@ -410,16 +407,25 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
         ),
         centerTitle: true,
         actions: [
-          IconButton(
-            icon: const Icon(
-              Icons.help_outline,
-              color: Colors.white,
-            ),
-            onPressed: () {
-              // Show help dialog
-            },
-          ),
-        ],
+  Tooltip(
+    key: _helpTipKey,
+    triggerMode: TooltipTriggerMode.manual, // show it yourself
+    message: 'Name it, set an unlock date, then seal it.\nIt stays locked until the unlock day.',
+    enableTapToDismiss: true,
+    preferBelow: true,
+    decoration: BoxDecoration(
+      color: const Color(0xFF2A2A2A),
+      borderRadius: BorderRadius.circular(12),
+    ),
+    textStyle: const TextStyle(color: Color(0xFF9CA3AF), height: 1.35),
+    child: IconButton(
+      icon: const Icon(Icons.help_outline, color: Colors.white),
+      onPressed: () => _helpTipKey.currentState?.ensureTooltipVisible(),
+    ),
+  ),
+],
+
+
       ),
       body: SafeArea(
         child: Form(
@@ -434,7 +440,7 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
                     _buildInputField(
                       label: 'Capsule Name',
                       controller: _nameController,
-                      hint: 'Summer 2025 Memories',
+                      hint: 'Name it like a movie trailer',
                       validator: (v) {
                         if (v == null || v.trim().isEmpty) {
                           return 'Capsule name is required.';
@@ -446,7 +452,7 @@ class _CreateCapsuleScreenState extends State<CreateCapsuleScreen> {
                     _buildInputField(
                       label: 'Description',
                       controller: _descriptionController,
-                      hint: 'What\'s this capsule about? (optional)',
+                      hint: 'What belongs in here? Be specific. Be brave.',
                       maxLines: 4,
                       maxLength: _maxDescriptionLength,
                       showCounter: true,

@@ -128,7 +128,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
               const SizedBox(height: 12),
               // Description
               Text(
-                'Enter your email address below and we\'ll send\nyou instructions to create a new one.',
+                'We’ll pretend this never happened. Enter your email for a reset link.',
                 style: TextStyle(
                   fontSize: 15,
                   color: Colors.white.withOpacity(0.6),
@@ -159,7 +159,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       fontSize: 15,
                     ),
                     decoration: InputDecoration(
-                      hintText: 'you@example.com',
+                      hintText: 'batman@gotham.com',
                       hintStyle: const TextStyle(
                         color: Color(0xFF6B7280),
                         fontSize: 15,
@@ -250,7 +250,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Text(
-                    'Remember your password? ',
+                    'Wait, you actually remember it? ',
                     style: TextStyle(
                       color: Colors.white.withOpacity(0.6),
                       fontSize: 15,
